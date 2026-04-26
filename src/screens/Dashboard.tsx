@@ -16,13 +16,14 @@ import {
   Plus,
   ArrowRight,
   Calendar,
+  Mic,
 } from 'lucide-react';
 import Weather from '../components/Weather';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
 
 export default function Dashboard() {
-  const { t } = useApp();
+  const { t, language } = useApp();
   const { userProfile, loading } = useAuth();
   const navigate = useNavigate();
 
@@ -179,6 +180,13 @@ export default function Dashboard() {
                 desc: 'Best Practices',
                 color: 'text-tertiary',
                 path: '/tools',
+              },
+              {
+                icon: Mic,
+                label: language === 'bn' ? 'ভয়েস সহকারী' : 'Voice Assistant',
+                desc: language === 'bn' ? 'বাংলা ও ইংরেজি' : 'Bangla & English AI',
+                color: 'text-purple-500',
+                path: '/voice',
               },
             ].map((tool, i) => (
               <div

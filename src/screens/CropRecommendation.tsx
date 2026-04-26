@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import Layout from '../components/Layout';
 import { GoogleGenAI } from '@google/genai';
-import { 
-  TrendingUp, 
-  ShieldCheck, 
-  CloudLightning, 
+import {
+  TrendingUp,
+  ShieldCheck,
+  CloudLightning,
   Leaf,
   Loader2,
   AlertCircle,
@@ -44,7 +44,7 @@ export default function CropRecommendation() {
   const [n, setN] = useState<string>('');
   const [p, setP] = useState<string>('');
   const [k, setK] = useState<string>('');
-  
+
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
 
@@ -101,7 +101,7 @@ export default function CropRecommendation() {
       setError('Please enter values for Nitrogen, Phosphorus, and Potassium.');
       return;
     }
-    
+
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       setError('System Error: API Key is missing.');
@@ -114,8 +114,8 @@ export default function CropRecommendation() {
 
     try {
       const ai = new GoogleGenAI({ apiKey });
-      
-      const weatherContext = weather 
+
+      const weatherContext = weather
         ? `Location: ${weather.city}. Weather: ${weather.temp}°C, ${weather.humidity}% humidity, ${weather.description}.`
         : 'Location and weather data unavailable. Assume typical seasonal conditions in Bangladesh.';
 
@@ -148,7 +148,7 @@ export default function CropRecommendation() {
       const text = result.text;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Invalid AI response format');
-      
+
       const data = JSON.parse(jsonMatch[0]);
       if (!data.recommendations || data.recommendations.length !== 3) {
         throw new Error('AI did not return exactly 3 recommendations.');
@@ -245,7 +245,7 @@ export default function CropRecommendation() {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={getRecommendation}
               disabled={loading || !n || !p || !k}
               className="w-full bg-primary text-on-primary py-4 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
@@ -265,9 +265,9 @@ export default function CropRecommendation() {
           )}
 
           {prediction && !loading && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }} 
-              animate={{ opacity: 1, y: 0 }} 
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
               className="space-y-6"
             >
               {/* Weather Impact Summary */}
@@ -287,7 +287,7 @@ export default function CropRecommendation() {
               <div className="space-y-4">
                 <h3 className="font-black text-xl px-2">Top 3 Matches</h3>
                 {prediction.recommendations.map((crop, idx) => (
-                  <motion.div 
+                  <motion.div
                     key={idx}
                     onClick={() => navigate(`/tools/crops/roadmap?crop=${encodeURIComponent(crop.cropName)}`)}
                     initial={{ opacity: 0, x: -20 }}
@@ -298,7 +298,7 @@ export default function CropRecommendation() {
                     <div className="absolute top-0 right-0 bg-primary text-on-primary px-4 py-2 rounded-bl-3xl font-black text-lg shadow-md">
                       #{idx + 1}
                     </div>
-                    
+
                     <div className="pr-12">
                       <h3 className="text-2xl font-black mb-1">{crop.cropName}</h3>
                       <div className="flex items-center gap-2 mb-4">

@@ -1,11 +1,11 @@
 import { useState, useRef, ChangeEvent } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { 
-  Camera, 
-  Upload, 
-  Leaf, 
-  AlertCircle, 
-  CheckCircle2, 
+import {
+  Camera,
+  Upload,
+  Leaf,
+  AlertCircle,
+  CheckCircle2,
   Loader2,
   Scan,
   RefreshCw,
@@ -46,7 +46,7 @@ export default function DiseaseDetection() {
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
     console.log('Gemini AI: Initializing with Environment Key...');
-    
+
     if (!apiKey) {
       setError('System Error: Key is empty in code.');
       setLoading(false);
@@ -95,7 +95,7 @@ export default function DiseaseDetection() {
       const text = result.text;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('Invalid AI response');
-      
+
       const data = JSON.parse(jsonMatch[0]);
       if (data.error) throw new Error(data.error);
 
@@ -127,7 +127,7 @@ export default function DiseaseDetection() {
         <motion.div layout className="bg-white rounded-[2.5rem] p-6 shadow-2xl border border-white/50 relative overflow-hidden group">
           <div className="relative z-10 space-y-6">
             {!image ? (
-              <div 
+              <div
                 onClick={() => fileInputRef.current?.click()}
                 className="aspect-square rounded-[2rem] border-2 border-dashed border-primary/20 bg-primary/5 flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-primary/10 transition-all active:scale-95"
               >
@@ -151,10 +151,10 @@ export default function DiseaseDetection() {
                 {!loading && !prediction && (
                   <div className="flex gap-3">
                     <button onClick={() => setImage(null)} className="flex-1 py-4 bg-surface-container text-on-surface font-bold rounded-2xl flex justify-center gap-2">
-                       <RefreshCw className="w-4 h-4" /> Retake
+                      <RefreshCw className="w-4 h-4" /> Retake
                     </button>
                     <button onClick={analyzeImage} className="flex-[2] py-4 bg-primary text-on-primary font-bold rounded-2xl flex justify-center gap-2 shadow-lg shadow-primary/30">
-                       <CheckCircle2 className="w-4 h-4" /> Scan with AI
+                      <CheckCircle2 className="w-4 h-4" /> Scan with AI
                     </button>
                   </div>
                 )}
@@ -179,8 +179,8 @@ export default function DiseaseDetection() {
                   <div className={cn(
                     "px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
                     prediction.severity === 'high' ? "bg-red-100 text-red-700" :
-                    prediction.severity === 'medium' ? "bg-orange-100 text-orange-700" :
-                    "bg-green-100 text-green-700"
+                      prediction.severity === 'medium' ? "bg-orange-100 text-orange-700" :
+                        "bg-green-100 text-green-700"
                   )}>
                     {prediction.severity} severity
                   </div>
@@ -226,12 +226,12 @@ export default function DiseaseDetection() {
         </AnimatePresence>
 
         <div className="flex justify-center">
-            <span className={cn(
-              "text-[9px] font-bold uppercase tracking-tight px-3 py-1 rounded-full",
-              keyStatus === 'Loaded' ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-            )}>
-              AI Status: Key {keyStatus}
-            </span>
+          <span className={cn(
+            "text-[9px] font-bold uppercase tracking-tight px-3 py-1 rounded-full",
+            keyStatus === 'Loaded' ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+          )}>
+            AI Status: Key {keyStatus}
+          </span>
         </div>
       </div>
     </Layout>

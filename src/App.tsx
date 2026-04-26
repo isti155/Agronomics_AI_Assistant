@@ -10,6 +10,7 @@ import DiseaseDetection from './screens/DiseaseDetection';
 import CropRoadmap from './screens/CropRoadmap';
 import KnowledgeCenter from './screens/KnowledgeCenter';
 import Profile from './screens/Profile';
+import VoiceAssistant from './screens/VoiceAssistant';
 import { AnimatePresence } from 'motion/react';
 
 
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/tools/crops/roadmap" element={<CropRoadmap />} />
             <Route path="/tools/scan" element={<DiseaseDetection />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/voice" element={<VoiceAssistant />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
