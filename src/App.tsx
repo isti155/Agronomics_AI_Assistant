@@ -11,6 +11,8 @@ import CropRoadmap from './screens/CropRoadmap';
 import KnowledgeCenter from './screens/KnowledgeCenter';
 import Profile from './screens/Profile';
 import VoiceAssistant from './screens/VoiceAssistant';
+import WeatherForecast from './screens/WeatherForecast';
+import GuideDetail from './screens/GuideDetail';
 import { AnimatePresence } from 'motion/react';
 
 
@@ -32,6 +34,8 @@ export default function App() {
             <Route path="/tools/scan" element={<DiseaseDetection />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/voice" element={<VoiceAssistant />} />
+            <Route path="/weather" element={<WeatherForecast />} />
+            <Route path="/guide" element={<GuideDetail />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
