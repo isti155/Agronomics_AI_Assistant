@@ -59,6 +59,14 @@ export interface UserSettings {
 // (denormalized for fast dashboard reads)
 // ─────────────────────────────────────────────
 
+/** Polygon overlay data stored inline on the Field document */
+export interface FieldPolygon {
+  points: Array<{ lat: number; lng: number }>;
+  calculated_area: number;       // area derived from the Shoelace formula
+  area_unit: 'acres' | 'hectares' | 'bigha';
+  correction_applied: boolean;   // true if user manually adjusted area
+}
+
 export interface Field {
   field_id?: string;
   field_name: string;
@@ -67,6 +75,10 @@ export interface Field {
   geo_hash: string;
   center_point: GeoPoint;
   soil_summary: SoilSummary;
+  /** 'polygon' = GPS walk mode, 'simple' = single point + manual area */
+  input_mode: 'polygon' | 'simple';
+  /** Polygon boundary data (only present when input_mode === 'polygon') */
+  polygon?: FieldPolygon;
   // Denormalized for fast UI
   active_crop?: string;
   health_status?: 'healthy' | 'attention_needed' | 'critical' | 'unknown';
