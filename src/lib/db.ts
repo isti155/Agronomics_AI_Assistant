@@ -41,6 +41,7 @@ import type {
   UserProfile,
   UserSettings,
   Field,
+  FieldPolygon,
   FieldBoundary,
   FieldSnapshot,
   CropCycle,
@@ -148,6 +149,51 @@ export async function updateField(
 /** Delete a field */
 export async function deleteField(userId: string, fieldId: string): Promise<void> {
   await deleteDoc(doc(db, `users/${userId}/fields/${fieldId}`));
+}
+
+/**
+ * Save a new field that includes polygon data.
+ * Writes the field document (with polygon inline) AND boundary subcollection points.
+ */
+export async function saveFieldWithPolygon(
+  userId: string,
+  fieldData: Omit<Field, 'field_id' | 'created_at'>
+): Promise<string> {
+  const colRef = collection(db, `users/${userId}/fields`);
+  const docRef = await addDoc(colRef, {
+    ...fieldData,
+    created_at: serverTimestamp(),
+  });
+
+  // Also write boundary subcollection for the global fields layer
+  if (fieldData.polygon && fieldData.input_mode === 'polygon') {
+    const boundaryCol = collection(db, `fields_global/${docRef.id}/boundaries`);
+    const writes = fieldData.polygon.points.map((pt, seq) =>
+      addDoc(boundaryCol, { seq, lat: pt.lat, lng: pt.lng, recorded_at: serverTimestamp() })
+    );
+    await Promise.all(writes);
+  }
+
+  return docRef.id;
+}
+
+/** Update the polygon data on an existing field */
+export async function updateFieldPolygon(
+  userId: string,
+  fieldId: string,
+  polygon: FieldPolygon
+): Promise<void> {
+  const docRef = doc(db, `users/${userId}/fields/${fieldId}`);
+  await updateDoc(docRef, { polygon } as Record<string, any>);
+
+  // Overwrite boundary subcollection
+  const boundaryCol = collection(db, `fields_global/${fieldId}/boundaries`);
+  const existing = await getDocs(boundaryCol);
+  await Promise.all(existing.docs.map(d => deleteDoc(d.ref)));
+  const writes = polygon.points.map((pt, seq) =>
+    addDoc(boundaryCol, { seq, lat: pt.lat, lng: pt.lng, recorded_at: serverTimestamp() })
+  );
+  await Promise.all(writes);
 }
 
 /** Real-time listener for user fields (Dashboard live updates) */

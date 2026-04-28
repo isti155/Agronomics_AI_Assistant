@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './AppContext';
+import { AuthProvider } from './AuthContext';
 import Splash from './screens/Splash';
 import Login from './screens/Login';
 import Signup from './screens/Signup';
@@ -17,6 +18,7 @@ import { AnimatePresence } from 'motion/react';
 
 export default function App() {
   return (
+    <AuthProvider>
     <AppProvider>
       <BrowserRouter>
         <AnimatePresence mode="wait">
@@ -39,5 +41,6 @@ export default function App() {
         </AnimatePresence>
       </BrowserRouter>
     </AppProvider>
+    </AuthProvider>
   );
 }
