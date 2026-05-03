@@ -3,7 +3,7 @@ import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout';
-import { getUserFields } from '../lib/db';
+import { getUserFields, subscribeToUserFields } from '../lib/db';
 import type { Field } from '../types';
 import {
   CloudRain,
@@ -21,6 +21,7 @@ import {
   Mic,
   CloudSun,
   TrendingUp,
+  RefreshCw,
 } from 'lucide-react';
 import Weather from '../components/Weather';
 import { 
@@ -37,6 +38,32 @@ import { db } from '../lib/firebase';
 import { GoogleGenAI } from '@google/genai';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+
+// --- Farm Stats Card ---
+function FarmStats({ fields }: { fields: Field[] }) {
+  const { t } = useApp();
+  const total = fields.length;
+  const active = fields.filter(f => f.active_crop).length;
+  const alerts = fields.filter(f => f.health_status === 'critical' || f.health_status === 'attention_needed').length;
+  if (total === 0) return null;
+  return (
+    <section className="grid grid-cols-3 gap-3">
+      {[
+        { label: t('totalFields'), value: total, icon: MapIcon, color: 'text-secondary bg-secondary/10' },
+        { label: t('activeCrops'), value: active, icon: Sprout, color: 'text-primary bg-primary/10' },
+        { label: t('healthAlerts'), value: alerts, icon: AlertCircle, color: alerts > 0 ? 'text-red-500 bg-red-100' : 'text-green-600 bg-green-100' },
+      ].map(stat => (
+        <div key={stat.label} className="bg-surface-container-lowest rounded-2xl p-4 border border-outline-variant/10 flex flex-col items-center gap-2 shadow-sm">
+          <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center', stat.color)}>
+            <stat.icon className="w-4 h-4" />
+          </div>
+          <span className="text-2xl font-black text-on-surface">{stat.value}</span>
+          <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider text-center">{stat.label}</span>
+        </div>
+      ))}
+    </section>
+  );
+}
 
 // --- Recent Activity Component ---
 function RecentActivity() {
@@ -232,94 +259,117 @@ function MyFields() {
 
 
 // --- Daily Guide Component ---
+const FARMING_TOPICS = [
+  'AWD irrigation technique for Boro rice (বোরো ধান)',
+  'Jute retting and fiber quality improvement (পাটের আঁশ)',
+  'Organic composting for Aman paddy (আমন ধান)',
+  'Kalbaishakhi storm protection for standing crops',
+  'Urea fertilizer scheduling for BRRI Dhan-29',
+  'Bio-pesticide use for Aus rice (আউশ ধান)',
+  'Integrated soil management for vegetable farms',
+  'Post-harvest drying and storage of rice',
+  'Managing waterlogging in Aman season',
+  'Green manuring with Dhaincha (ধৈঞ্চা)',
+  'Pheromone trap installation for stem borer',
+  'Flood-tolerant BRRI rice variety selection',
+  'Salinity management in coastal Bangladesh',
+  'Winter vegetable (rabi crops) planning',
+  'Drought management for Aus season',
+];
+
 function DailyGuide() {
   const { t, language } = useApp();
   const navigate = useNavigate();
-  const [tip, setTip] = useState<{ title: string; desc: string; category: string; image: string, steps?: any[] } | null>(null);
+  const [tip, setTip] = useState<{ title: string; desc: string; category: string; image: string; steps?: any[]; proTip?: string; season?: string; focus?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [topicIdx, setTopicIdx] = useState(() => Math.floor(Math.random() * FARMING_TOPICS.length));
 
-  useEffect(() => {
-    const fetchDailyTip = async () => {
-      setLoading(true);
-      
-      // If not saved, call AI
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        // Fallback static tip if API key is missing
-        const fallback = {
-          title: language === 'bn' ? 'বোরো ধান সংগ্রহ' : 'Boro Rice Harvesting',
-          desc: language === 'bn' 
-            ? 'ধান কাটার পর দ্রুত মাড়াই করে রোদে শুকিয়ে নিন। আর্দ্রতা ১২-১৪% এর নিচে রাখা জরুরি।' 
-            : 'After harvesting Boro rice, thresh and dry it quickly. Keep moisture below 12-14%.',
-          category: language === 'bn' ? 'ফসল সংগ্রহ' : 'Harvesting',
-          image: 'https://images.unsplash.com/photo-1530507629858-e4977d30e9e0?auto=format&fit=crop&q=80&w=1000'
-        };
-        setTip(fallback);
-        setLoading(false);
-        return;
-      }
+  const IMAGES = [
+    'https://images.unsplash.com/photo-1500382017468-9049fee78a6c?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1595113316349-9fa4eb24f884?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1530507629858-e4977d30e9e0?auto=format&fit=crop&q=80&w=1000',
+    'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&q=80&w=1000',
+  ];
 
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        const model = ai.getGenerativeModel({ model: 'gemini-1.5-flash' });
-        
-        const result = await model.generateContent(`
-          You are a senior Bangladeshi Agronomist. 
-          Provide a highly professional, localized farming guide for today (${new Date().toLocaleDateString()}) in ${language === 'bn' ? 'Bengali' : 'English'}.
-          Focus on current Bangladeshi context: April is Kharif-1 season. Focus on crops like BRRI Dhan, Jute (Tossa/Deshi), or summer vegetables (Okra, Bitter Gourd).
-          Consider specific Bangladeshi conditions: High humidity, heat waves, or early Nor'wester (Kalbaishakhi) risks.
-          
-          Format the response strictly as a JSON object with:
-          - title: Professional title (e.g., "Advanced Pest Management for Jute")
-          - desc: 2 sentence professional overview.
-          - category: One word (e.g., "Irrigation", "Protection")
-          - steps: Array of 3 objects with {title, detail}
-          
-          Strictly JSON, no markdown.
-        `);
+  const fetchTip = async (idx: number) => {
+    setLoading(true);
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    const topic = FARMING_TOPICS[idx];
 
-        const response = await result.response;
-        const text = response.text();
-        
-        // Basic cleanup in case AI adds markdown
-        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const data = JSON.parse(cleanJson);
-        
-        const finalTip = {
-          ...data,
-          image: [
-            'https://images.unsplash.com/photo-1500382017468-9049fee78a6c?auto=format&fit=crop&q=80&w=1000',
-            'https://images.unsplash.com/photo-1523348837708-15d4a09cfac2?auto=format&fit=crop&q=80&w=1000',
-            'https://images.unsplash.com/photo-1595113316349-9fa4eb24f884?auto=format&fit=crop&q=80&w=1000',
-            'https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&q=80&w=1000'
-          ][Math.floor(Math.random() * 4)]
-        };
+    if (!apiKey) {
+      setTip({
+        title: language === 'bn' ? 'বোরো ধান সংগ্রহ' : 'Boro Rice Harvesting',
+        desc: language === 'bn' ? 'ধান কাটার পর দ্রুত মাড়াই করে রোদে শুকিয়ে নিন। আর্দ্রতা ১২-১৪% এর নিচে রাখা জরুরি।' : 'Thresh and dry quickly. Keep moisture below 12-14%.',
+        category: language === 'bn' ? 'ফসল সংগ্রহ' : 'Harvesting',
+        image: IMAGES[0],
+        season: 'Boro', focus: 'Harvesting',
+      });
+      setLoading(false);
+      return;
+    }
 
-        setTip(finalTip);
-      } catch (err) {
-        console.error('AI Tip Error:', err);
-        // Fallback on error
-        setTip({
-          title: language === 'bn' ? 'মাটির স্বাস্থ্য' : 'Soil Health',
-          desc: language === 'bn' ? 'সুষম সার ব্যবহার করুন এবং জৈব সারের পরিমাণ বাড়ান।' : 'Use balanced fertilizers and increase organic manure usage.',
-          category: language === 'bn' ? 'মাটি ব্যবস্থাপনা' : 'Soil Management',
-          image: 'https://images.unsplash.com/photo-1464226184884-fa280b87c399?auto=format&fit=crop&q=80&w=1000'
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const lang = language === 'bn' ? 'Bengali' : 'English';
+      const prompt = `You are a senior Bangladeshi agronomist with 20 years of field experience.
+Today's topic: "${topic}"
+Generate a unique, practical farming guide for Bangladeshi farmers in ${lang}.
+Today's date: ${new Date().toLocaleDateString('en-BD')}. Make it highly specific and different from generic advice.
 
-    fetchDailyTip();
-  }, [language]);
+Return ONLY valid JSON (no markdown, no code block):
+{
+  "title": "Specific professional title about the topic",
+  "category": "One word category (e.g. Irrigation, Pest, Soil, Harvest)",
+  "season": "Relevant season (e.g. Kharif-1, Rabi, Boro, Aman)",
+  "focus": "One word focus area (e.g. Optimization, Protection, Planning)",
+  "desc": "2 engaging sentences summarizing the guide with a specific fact or statistic",
+  "steps": [
+    {"title": "Step title", "detail": "Specific actionable detail with quantities/timings"},
+    {"title": "Step title", "detail": "Specific actionable detail"},
+    {"title": "Step title", "detail": "Specific actionable detail"},
+    {"title": "Step title", "detail": "Specific actionable detail"}
+  ],
+  "proTip": "One expert insight specific to Bangladesh conditions with a measurable outcome",
+  "relatedQuestion": "A realistic question a Bangladeshi farmer would ask about this topic"
+}`;
+
+      const result = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt });
+      const text = result.text;
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error('Bad response');
+      const data = JSON.parse(match[0]);
+      setTip({ ...data, image: IMAGES[idx % IMAGES.length] });
+    } catch (err) {
+      console.error('AI Tip Error:', err);
+      setTip({
+        title: language === 'bn' ? 'মাটির স্বাস্থ্য ব্যবস্থাপনা' : 'Soil Health Management',
+        desc: language === 'bn' ? 'সুষম সার ব্যবহার করুন এবং জৈব সারের পরিমাণ বাড়ান।' : 'Use balanced fertilizers and increase organic manure for better yield.',
+        category: language === 'bn' ? 'মাটি ব্যবস্থাপনা' : 'Soil Management',
+        image: IMAGES[2],
+        season: 'All Seasons', focus: 'Optimization',
+        proTip: 'Compost application before transplanting increases yield by 15-20% in Bangladesh conditions.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchTip(topicIdx); }, [topicIdx, language]);
+
+  const handleRefresh = () => {
+    const next = (topicIdx + 1 + Math.floor(Math.random() * (FARMING_TOPICS.length - 1))) % FARMING_TOPICS.length;
+    setTopicIdx(next);
+  };
 
   if (loading) {
     return (
-      <div className="bg-surface-container-high/50 rounded-[2.5rem] p-8 h-80 flex flex-col items-center justify-center space-y-4 animate-pulse">
+      <div className="bg-surface-container-high/50 rounded-[2.5rem] p-8 h-72 flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
           <Sprout className="w-6 h-6 text-primary animate-bounce" />
         </div>
-        <p className="text-xs font-bold text-primary uppercase tracking-widest animate-pulse">Generating Daily Guide...</p>
+        <p className="text-xs font-bold text-primary uppercase tracking-widest animate-pulse">{t('generatingGuide')}</p>
       </div>
     );
   }
@@ -327,49 +377,57 @@ function DailyGuide() {
   if (!tip) return null;
 
   return (
-    <motion.section 
+    <motion.section
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="bg-surface-container-high/50 rounded-[2.5rem] overflow-hidden p-4 group editorial-shadow-sm hover:editorial-shadow-md transition-all duration-500"
     >
-      <div className="relative h-64 rounded-[2rem] overflow-hidden mb-6">
-        <img
-          src={tip.image}
-          alt={tip.title}
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-        />
+      <div className="relative h-56 rounded-[2rem] overflow-hidden mb-5">
+        <img src={tip.image} alt={tip.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
         <div className="absolute top-4 left-4 bg-primary/20 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/20 flex items-center gap-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
-          <span className="text-[10px] font-headline font-black text-white uppercase tracking-widest">Daily AI Insight</span>
+          <span className="text-[10px] font-headline font-black text-white uppercase tracking-widest">{t('dailyAiInsight')}</span>
         </div>
+        <button
+          onClick={handleRefresh}
+          className="absolute top-4 right-4 w-9 h-9 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 flex items-center justify-center text-white hover:bg-black/60 transition-colors"
+          title="Get new tip"
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       </div>
 
       <div className="px-4 pb-4 space-y-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] font-headline font-black text-primary uppercase tracking-[0.2em] bg-primary/10 px-2.5 py-1 rounded-lg">
             {tip.category}
           </span>
+          {tip.season && (
+            <span className="text-[10px] font-bold text-secondary bg-secondary/10 px-2.5 py-1 rounded-lg uppercase">
+              {tip.season}
+            </span>
+          )}
           <span className="h-[1px] flex-grow bg-primary/20" />
         </div>
 
-        <h3 className="text-2xl font-headline font-bold text-on-surface leading-tight tracking-tight">
-          {tip.title}
-        </h3>
+        <h3 className="text-xl font-headline font-bold text-on-surface leading-tight tracking-tight">{tip.title}</h3>
+        <p className="text-sm text-on-surface-variant leading-relaxed font-medium">{tip.desc}</p>
 
-        <p className="text-sm text-on-surface-variant leading-relaxed font-medium">
-          {tip.desc}
-        </p>
-
-        <button 
-          onClick={() => navigate('/guide', { state: { tip } })}
-          className="flex items-center gap-3 text-primary font-headline font-black group/btn pt-2"
-        >
-          {t('readGuide')}
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center group-hover/btn:bg-primary group-hover/btn:text-white transition-all">
-            <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-0.5 transition-transform" />
-          </div>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/guide', { state: { tip } })}
+            className="flex-1 flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-2xl font-bold text-sm active:scale-95 transition-transform"
+          >
+            {t('readGuide')} <ArrowRight className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleRefresh}
+            className="w-12 h-12 flex items-center justify-center bg-surface-container-low rounded-2xl border border-outline-variant/20 hover:bg-surface-container transition-colors"
+          >
+            <RefreshCw className="w-4 h-4 text-on-surface-variant" />
+          </button>
+        </div>
       </div>
     </motion.section>
   );
@@ -443,6 +501,9 @@ export default function Dashboard() {
 
         {/* My Fields */}
         <MyFields />
+
+        {/* Farm Stats */}
+        <FarmStats fields={fields} />
 
         {/* Recent Activity */}
         <RecentActivity />
@@ -532,7 +593,11 @@ export default function Dashboard() {
       </div>
 
       <div className="fixed bottom-24 right-6 z-40">
-        <button className="bg-primary text-on-primary w-14 h-14 rounded-[1.25rem] shadow-xl flex items-center justify-center active:scale-95 transition-transform">
+        <button
+          onClick={() => navigate('/fields')}
+          className="bg-primary text-on-primary w-14 h-14 rounded-[1.25rem] shadow-xl flex items-center justify-center active:scale-95 transition-transform"
+          title="Add Field"
+        >
           <Plus className="w-6 h-6" />
         </button>
       </div>

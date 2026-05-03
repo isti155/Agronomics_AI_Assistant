@@ -8,7 +8,7 @@ import { TrendingUp, ShieldCheck, CloudLightning, Leaf, Loader2, AlertCircle, Ma
 
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { getUserFields, saveCropRecommendationResult, getCropRecommendationHistory, deleteCropRecommendationResult } from '../lib/db';
+import { getUserFields, addField, updateField, saveCropRecommendationResult, getCropRecommendationHistory, deleteCropRecommendationResult } from '../lib/db';
 import type { CropRecResult, CropRecHistoryEntry } from '../lib/db';
 import type { Field } from '../types';
 
@@ -235,29 +235,34 @@ Return ONLY valid JSON (no markdown):
     }
   };
 
-  const handleAddAsField = async (crop: CropRecommendation) => {
-    if (!userProfile?.uid) return;
-
+  const handleAddAsField = async (crop: CropRecResult) => {
+    if (!uid) return;
     try {
       setLoading(true);
-      // 1. Create the Field
-      const fieldRef = await addDoc(collection(db, 'fields'), {
-        userId: userProfile.uid,
-        name: `Field ${crop.cropName.split(' ')[0]}`,
-        crop: crop.cropName,
-        growthStage: 0,
-        status: 'HEALTHY',
-        createdAt: serverTimestamp(),
-        soil: { n, p, k },
-        weather: weather
-      });
-
-      // 2. We could also trigger a roadmap generation here if needed, 
-      // but for now, let's just navigate to dashboard
-      navigate('/dashboard');
+      if (selectedField?.field_id) {
+        // Update the existing selected field's active crop
+        await updateField(uid, selectedField.field_id, {
+          active_crop: crop.cropName,
+          health_status: 'healthy',
+        });
+      } else {
+        // No field selected — create a new one
+        await addField(uid, {
+          field_name: `Field (${crop.cropName.split('/')[0].trim()})`,
+          area_size: 0,
+          area_unit: 'acres',
+          geo_hash: '',
+          center_point: { lat: 0, lng: 0 },
+          soil_summary: { type: soilType, ph: parseFloat(ph) || 7 },
+          input_mode: 'simple',
+          active_crop: crop.cropName,
+          health_status: 'healthy',
+        });
+      }
+      navigate('/fields');
     } catch (err) {
-      console.error('Add field error:', err);
-      setError('Failed to add field.');
+      console.error('Sync field error:', err);
+      setError('Failed to sync crop to field. Please try again.');
     } finally {
       setLoading(false); setSaving(false);
     }
@@ -419,7 +424,11 @@ Return ONLY valid JSON (no markdown):
                     {(prediction.results as CropRecResult[]).map((crop: CropRecResult, idx: number) => (
                       <div key={idx}>
                         <CropCard crop={crop} idx={idx}
-                          onClick={() => { navigate(`/tools/crops/roadmap?crop=${encodeURIComponent(crop.cropName)}`); }}
+                          onClick={() => {
+                            const params = new URLSearchParams({ crop: crop.cropName });
+                            if (selectedField?.field_id) params.set('fieldId', selectedField.field_id);
+                            navigate(`/tools/crops/roadmap?${params.toString()}`);
+                          }}
                           onSync={() => handleAddAsField(crop)} />
                       </div>
                     ))}

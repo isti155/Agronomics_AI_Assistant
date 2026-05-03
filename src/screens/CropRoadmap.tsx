@@ -5,8 +5,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Loader2, AlertCircle, Clock, CheckCircle2, Leaf, Package, AlertTriangle, Plus } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useAuth } from '../AuthContext';
-import { db } from '../lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { addField, updateField } from '../lib/db';
 import { useNavigate } from 'react-router-dom';
 
 interface RoadmapPhase {
@@ -28,30 +27,44 @@ export default function CropRoadmap() {
   const { userProfile } = useAuth();
   const navigate = useNavigate();
   const cropName = searchParams.get('crop');
+  const fieldId = searchParams.get('fieldId'); // passed from CropRecommendation
   const [data, setData] = useState<CropRoadmapData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [synced, setSynced] = useState(false);
 
-  const handleAddAsField = async () => {
-    if (!userProfile?.uid || !data) return;
-
+  const handleActivate = async () => {
+    if (!userProfile?.uid || !cropName) return;
     try {
-      setLoading(true);
-      await addDoc(collection(db, 'fields'), {
-        userId: userProfile.uid,
-        name: `Field ${cropName}`,
-        crop: cropName,
-        growthStage: 0,
-        status: 'HEALTHY',
-        createdAt: serverTimestamp(),
-        roadmap: data
-      });
-      navigate('/dashboard');
+      setSyncing(true);
+      if (fieldId) {
+        // Update the field that was selected in CropRecommendation
+        await updateField(userProfile.uid, fieldId, {
+          active_crop: cropName,
+          health_status: 'healthy',
+        });
+      } else {
+        // No field was selected — create a brand new one
+        await addField(userProfile.uid, {
+          field_name: `Field (${cropName.split('/')[0].trim()})`,
+          area_size: 0,
+          area_unit: 'acres',
+          geo_hash: '',
+          center_point: { lat: 0, lng: 0 },
+          soil_summary: { type: 'Mixed', ph: 7 },
+          input_mode: 'simple',
+          active_crop: cropName,
+          health_status: 'healthy',
+        });
+      }
+      setSynced(true);
+      setTimeout(() => navigate('/fields'), 1200);
     } catch (err) {
-      console.error('Add field error:', err);
-      setError('Failed to sync roadmap to fields.');
+      console.error('Activate roadmap error:', err);
+      setError('Failed to activate roadmap. Please try again.');
     } finally {
-      setLoading(false);
+      setSyncing(false);
     }
   };
 
@@ -145,11 +158,17 @@ export default function CropRoadmap() {
               </div>
 
               <button 
-                onClick={handleAddAsField}
-                className="mt-6 mx-auto bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-primary/30 active:scale-95 transition-all"
+                onClick={handleActivate}
+                disabled={syncing || synced}
+                className="mt-6 mx-auto bg-primary text-on-primary px-8 py-3 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-primary/30 active:scale-95 transition-all disabled:opacity-70"
               >
-                <Plus className="w-5 h-5" />
-                Activate this Roadmap
+                {synced ? (
+                  <><CheckCircle2 className="w-5 h-5" /> Activated!</>
+                ) : syncing ? (
+                  <><Loader2 className="w-5 h-5 animate-spin" /> Activating…</>
+                ) : (
+                  <><Plus className="w-5 h-5" /> {fieldId ? 'Activate for Selected Field' : 'Add to My Fields'}</>
+                )}
               </button>
             </div>
 
