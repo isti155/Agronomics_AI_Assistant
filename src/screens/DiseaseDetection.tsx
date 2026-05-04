@@ -51,6 +51,17 @@ export default function DiseaseDetection() {
   const handleImageUpload = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedMimeTypes.has(file.type)) {
+      setImage(null);
+      setPrediction(null);
+      setSavedOk(false);
+      setError('Please upload a valid image file (JPG, PNG, or WEBP).');
+      event.target.value = '';
+      return;
+    }
+
     setImage(URL.createObjectURL(file));
     setPrediction(null);
     setError(null);
