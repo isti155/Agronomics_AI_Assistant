@@ -562,6 +562,13 @@ export default function Dashboard() {
                 path: '/weather',
               },
               {
+                icon: Droplets,
+                label: 'Smart Irrigation',
+                desc: 'Land moisture & watering schedule',
+                color: 'text-blue-500',
+                path: '/irrigation',
+              },
+              {
                 icon: Mic,
                 label: t('voiceAssistant'),
                 desc: t('banglaEnglishAI'),
