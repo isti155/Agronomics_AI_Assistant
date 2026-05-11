@@ -787,3 +787,84 @@ export function subscribeToSessionMessages(
 export async function deleteVoiceChatSession(userId: string, sessionId: string): Promise<void> {
   await deleteDoc(doc(db, `users/${userId}/voice_sessions`, sessionId));
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DISEASE DETECTION RECORDS  →  users/{uid}/detections/{id}
+// Auto-saved whenever a scan is completed
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface DetectionRecord {
+  id?: string;
+  image_base64: string;
+  disease: string;
+  confidence: string;
+  severity: 'low' | 'medium' | 'high';
+  affected_crop: string;
+  diagnosis_category?: string;
+  description: string;
+  treatment_steps: string[];
+  prevention_tips: string[];
+  field_id?: string | null;
+  created_at: any;
+}
+
+/**
+ * Compress a Blob to a small JPEG thumbnail (max 400px) and return base64.
+ * Keeps the Firestore document well under the 1MB limit.
+ */
+function compressImageToBase64(blob: Blob, maxPx = 400, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+/**
+ * Compress the scanned leaf image and save the full diagnosis result to
+ * Firestore as a single document. No Firebase Storage needed — free plan compatible.
+ */
+export async function saveDiseaseDetectionRecord(
+  userId: string,
+  imageBlob: Blob,
+  diagnosis: {
+    disease: string;
+    confidence: string;
+    severity: 'low' | 'medium' | 'high';
+    affectedCrop: string;
+    diagnosisCategory?: string;
+    description: string;
+    treatmentSteps: string[];
+    preventionTips: string[];
+  },
+  fieldId?: string
+): Promise<string> {
+  const image_base64 = await compressImageToBase64(imageBlob);
+
+  const colRef = collection(db, `users/${userId}/detections`);
+  const docRef = await addDoc(colRef, {
+    image_base64,
+    disease: diagnosis.disease,
+    confidence: diagnosis.confidence,
+    severity: diagnosis.severity,
+    affected_crop: diagnosis.affectedCrop,
+    diagnosis_category: diagnosis.diagnosisCategory ?? null,
+    description: diagnosis.description,
+    treatment_steps: diagnosis.treatmentSteps,
+    prevention_tips: diagnosis.preventionTips,
+    field_id: fieldId || null,
+    created_at: serverTimestamp(),
+  });
+
+  return docRef.id;
+}

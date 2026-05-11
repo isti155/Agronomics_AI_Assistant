@@ -1,10 +1,10 @@
 import { initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { 
-  initializeFirestore, 
+import {
+  initializeFirestore,
   getFirestore,
-  persistentLocalCache, 
-  persistentMultipleTabManager 
+  persistentLocalCache,
+  persistentMultipleTabManager
 } from "firebase/firestore";
 
 const firebaseConfig = {
