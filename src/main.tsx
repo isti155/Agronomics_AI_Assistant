@@ -5,9 +5,8 @@ import './index.css';
 import { AuthProvider } from './AuthContext';
 
 // Error boundary to catch silent crashes and show them on screen
-interface EBProps { children?: React.ReactNode; }
 interface EBState { error: Error | null; }
-class ErrorBoundary extends Component<EBProps, EBState> {
+class ErrorBoundary extends Component<PropsWithChildren, EBState> {
   state: EBState = { error: null };
   static getDerivedStateFromError(error: Error): EBState {
     return { error };

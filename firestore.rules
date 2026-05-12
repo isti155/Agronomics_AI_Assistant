@@ -47,10 +47,11 @@ service cloud.firestore {
         allow read, write: if isAuthenticated() && isOwner(userId);
       }
 
-      // DETECTIONS — backend writes, user reads
+      // DETECTIONS — user creates from client, backend can update
       match /detections/{detectionId} {
         allow read: if isAuthenticated() && isOwner(userId);
-        allow create, update: if isBackendService();
+        allow create: if isAuthenticated() && isOwner(userId);
+        allow update: if isAuthenticated() && isOwner(userId) || isBackendService();
         allow delete: if false;
       }
 
@@ -59,6 +60,29 @@ service cloud.firestore {
         allow read: if isAuthenticated() && isOwner(userId);
         allow create, update: if isBackendService();
         allow delete: if false;
+      }
+
+      // PLANTED CROPS — user manages
+      match /planted_crops/{cropId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+
+        match /advice/{adviceId} {
+          allow read, write: if isAuthenticated() && isOwner(userId);
+        }
+      }
+
+      // CROP RECOMMENDATION HISTORY — user manages
+      match /crop_rec_history/{entryId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+      }
+
+      // VOICE SESSIONS — user manages
+      match /voice_sessions/{sessionId} {
+        allow read, write: if isAuthenticated() && isOwner(userId);
+
+        match /messages/{messageId} {
+          allow read, write: if isAuthenticated() && isOwner(userId);
+        }
       }
     }
 

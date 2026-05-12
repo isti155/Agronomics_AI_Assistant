@@ -53,7 +53,7 @@ function FieldDetailPanel({
   const [showRoadmap, setShowRoadmap] = useState(false);
 
   // Health status update
-  const [healthStatus, setHealthStatus] = useState(selected.health_status || 'unknown');
+  const [healthStatus, setHealthStatus] = useState<string>(selected.health_status || 'unknown');
   const [updatingHealth, setUpdatingHealth] = useState(false);
 
   // Soil quality update

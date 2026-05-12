@@ -79,113 +79,60 @@ export default function Weather() {
   const temp = Math.round(weatherData.main.temp);
   const feelsLike = Math.round(weatherData.main.feels_like);
   const humidity = weatherData.main.humidity;
-  const windSpeed = Math.round(weatherData.wind.speed * 3.6);
   const description = weatherData.weather[0]?.description || 'Clear';
   const mainCondition = weatherData.weather[0]?.main || 'Clear';
-  const cloudCover = weatherData.clouds?.all || 0;
   const city = weatherData.name;
-  const country = weatherData.sys?.country || '';
-  const visibility = weatherData.visibility ? Math.round(weatherData.visibility / 1000) : null;
+  const lat = weatherData.coord?.lat?.toFixed(2) || '23.54';
 
-  const getWeatherEmoji = (condition: string) => {
+  const getWeatherIcon = (condition: string) => {
     const c = condition.toLowerCase();
     if (c.includes('thunder')) return '⛈️';
     if (c.includes('rain') || c.includes('drizzle')) return '🌧️';
     if (c.includes('snow')) return '❄️';
     if (c.includes('cloud')) return '⛅';
-    if (c.includes('mist') || c.includes('fog') || c.includes('haze')) return '🌫️';
     return '☀️';
-  };
-
-  const getFarmingTip = (condition: string, humidity: number, temp: number) => {
-    const c = condition.toLowerCase();
-    if (c.includes('rain') || c.includes('thunder')) return '🌱 Hold off on pesticide spraying today.';
-    if (humidity > 80) return '⚠️ High humidity — watch for fungal diseases.';
-    if (temp > 35) return '💧 Irrigate crops in early morning or late evening.';
-    if (temp < 15) return '🧊 Protect sensitive crops from cold stress.';
-    if (c.includes('clear') && humidity < 50) return '✅ Great day for field operations!';
-    return '🌿 Moderate conditions — good for farm work.';
-  };
-
-  const gradientBg = () => {
-    const c = mainCondition.toLowerCase();
-    if (c.includes('rain') || c.includes('drizzle') || c.includes('thunder'))
-      return 'linear-gradient(135deg, #1a2a4a 0%, #2d4a7a 60%, #1e3b6b 100%)';
-    if (c.includes('cloud'))
-      return 'linear-gradient(135deg, #2a3a2e 0%, #4a6a52 60%, #3a5a42 100%)';
-    return 'linear-gradient(135deg, #1a4a2e 0%, #2d7a4e 60%, #1e6b45 100%)';
   };
 
   return (
     <motion.div
       whileTap={{ scale: 0.98 }}
       onClick={() => navigate('/weather')}
-      className="rounded-[2rem] p-6 cursor-pointer relative overflow-hidden shadow-xl"
-      style={{ background: gradientBg() }}
+      className="rounded-[2.5rem] p-6 cursor-pointer relative overflow-hidden shadow-sm bg-[#1e5d2d] text-white"
     >
-      {/* Ambient blobs */}
-      <div className="absolute -right-12 -top-12 w-52 h-52 rounded-full opacity-20" style={{ background: 'radial-gradient(circle, #7fff7f, transparent)' }} />
-      <div className="absolute -left-8 -bottom-8 w-40 h-40 rounded-full opacity-10" style={{ background: 'radial-gradient(circle, #ffffff, transparent)' }} />
+      <div className="relative z-10 space-y-6">
+        {/* Top Row: Location */}
+        <div className="flex items-center gap-1 opacity-80">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em]">
+            {city} - {lat}°N
+          </p>
+        </div>
 
-      <div className="relative z-10">
-        {/* Top Row */}
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-white/70">Live Weather</span>
+        {/* Middle Row: Temp + Icon */}
+        <div className="flex justify-between items-center">
+          <div className="space-y-1">
+            <div className="flex items-start">
+              <span className="text-7xl font-sans font-black leading-none">{temp}</span>
+              <span className="text-3xl font-medium mt-1">°C</span>
             </div>
-            <p className="text-white/90 font-bold text-base">{city}, {country}</p>
-            <p className="text-white/60 text-sm capitalize">{description}</p>
+            <p className="text-base font-medium opacity-90 capitalize">{description}</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Refresh location button */}
-            <button
-              id="weather-refresh-btn"
-              onClick={(e) => { e.stopPropagation(); fetchWeather(true); }}
-              disabled={refreshing}
-              title="Refresh my location"
-              className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all duration-200 disabled:opacity-50"
-            >
-              <RotateCcw className={`w-3.5 h-3.5 text-white/70 ${refreshing ? 'animate-spin' : ''}`} />
-            </button>
-            <div className="flex items-center gap-1 text-white/50 bg-white/10 rounded-xl px-3 py-1.5">
-              <span className="text-[10px] font-bold">7-Day Forecast</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </div>
+          <div className="text-6xl drop-shadow-lg">
+            {getWeatherIcon(mainCondition)}
           </div>
         </div>
 
-        {/* Temp + Emoji */}
-        <div className="flex items-end gap-4 mb-5">
-          <span className="text-7xl">{getWeatherEmoji(mainCondition)}</span>
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="font-black text-7xl text-white leading-none">{temp}</span>
-              <span className="text-3xl text-white/60 font-light">°C</span>
-            </div>
-            <p className="text-white/50 text-sm mt-1">Feels like {feelsLike}°C</p>
-          </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        {/* Bottom Row: Stats */}
+        <div className="grid grid-cols-3 gap-3">
           {[
-            { icon: Droplets, label: 'Humidity', value: `${humidity}%` },
-            { icon: Wind, label: 'Wind', value: `${windSpeed} km/h` },
-            { icon: Eye, label: 'Visibility', value: visibility != null ? `${visibility} km` : `${cloudCover}%` },
-          ].map(({ icon: Icon, label, value }) => (
-            <div key={label} className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm">
-              <Icon className="w-4 h-4 text-white/60 mb-1" />
-              <p className="text-[9px] font-bold uppercase tracking-wider text-white/50">{label}</p>
-              <p className="text-sm font-bold text-white">{value}</p>
+            { label: 'FEELS', value: `${feelsLike}°` },
+            { label: 'HUMIDITY', value: `${humidity}%` },
+            { label: 'RAIN', value: `20%` }, // Placeholder for rain chance as OWM current doesn't always provide it
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white/10 rounded-2xl p-3 backdrop-blur-md">
+              <p className="text-[9px] font-black uppercase tracking-widest opacity-60 mb-1">{stat.label}</p>
+              <p className="text-lg font-black">{stat.value}</p>
             </div>
           ))}
-        </div>
-
-        {/* Farming Tip Banner */}
-        <div className="bg-white/10 rounded-2xl px-4 py-2.5 backdrop-blur-sm border border-white/10">
-          <p className="text-[11px] font-semibold text-white/80">{getFarmingTip(mainCondition, humidity, temp)}</p>
         </div>
       </div>
     </motion.div>

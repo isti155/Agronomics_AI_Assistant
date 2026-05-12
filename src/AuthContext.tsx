@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import type { UserProfile } from './types';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import type { UserProfile, UserSettings } from './types';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -39,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (docSnap.exists()) {
             setUserProfile(docSnap.data() as UserProfile);
+            updateDoc(userDocRef, { last_active: serverTimestamp() }).catch(() => {});
           } else {
             // Auto-create basic profile for OAuth/social sign-ins
             const initialProfile: UserProfile = {

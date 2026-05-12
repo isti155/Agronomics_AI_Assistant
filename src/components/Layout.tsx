@@ -6,7 +6,10 @@ import {
   Map as MapIcon, 
   User, 
   ChevronLeft,
-  Sprout
+  Sprout,
+  Menu,
+  Bell,
+  Search
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -27,39 +30,48 @@ export default function Layout({ children, showBack, title, hideNav, hideLangTog
   const navItems = [
     { icon: Home, label: t('home'), path: '/dashboard' },
     { icon: MapIcon, label: t('fields'), path: '/fields' },
-    { icon: Sprout, label: 'ফসল', path: '/my-crops' },
+    { icon: Sprout, label: 'Crops', path: '/my-crops' },
     { icon: User, label: t('profile'), path: '/profile' },
   ];
 
   return (
     <div className="min-h-screen flex flex-col max-w-md mx-auto bg-surface relative overflow-x-hidden">
       {/* Top Bar */}
-      <header className="fixed top-0 w-full max-w-md z-50 bg-surface/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {showBack && (
+      <header className="fixed top-0 w-full max-w-md z-50 bg-surface/80 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-outline-variant/5">
+        <div className="flex items-center gap-4">
+          {showBack ? (
             <button 
               onClick={() => navigate(-1)}
               className="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high/50 hover:bg-surface-container-high transition-colors"
             >
-              <ChevronLeft className="w-6 h-6 text-primary" />
+              <ChevronLeft className="w-6 h-6 text-on-surface" />
+            </button>
+          ) : (
+            <button className="p-1">
+              <Menu className="w-6 h-6 text-on-surface" />
             </button>
           )}
-          <div className="flex items-center gap-2">
-            <Sprout className="w-6 h-6 text-primary" />
-            <h1 className="font-headline font-black text-primary tracking-tight text-lg">
-              {title || t('appName')}
-            </h1>
-          </div>
+          <h1 className="font-sans font-bold text-on-surface tracking-tight text-xl">
+            {title || 'Agronomist'}
+          </h1>
         </div>
         
-        {!hideLangToggle && (
-          <button 
-            onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
-            className="bg-primary/10 px-4 py-1.5 rounded-full font-headline font-bold text-sm text-primary hover:bg-primary/20 transition-all"
-          >
-            {language === 'en' ? 'BN' : 'EN'}
+        <div className="flex items-center gap-3">
+          {!hideLangToggle && (
+            <button 
+              onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-surface-container-high/30 font-bold text-[10px] text-on-surface-variant hover:bg-primary/10 transition-all"
+            >
+              {language === 'en' ? 'BN' : 'EN'}
+            </button>
+          )}
+          <button className="p-1 opacity-20">
+            <Search className="w-5 h-5 text-on-surface" />
           </button>
-        )}
+          <button className="p-1 opacity-20">
+            <Bell className="w-5 h-5 text-on-surface" />
+          </button>
+        </div>
       </header>
 
       <main className={cn("flex-grow pt-20", !hideNav && "pb-32")}>
@@ -75,7 +87,7 @@ export default function Layout({ children, showBack, title, hideNav, hideLangTog
 
       {/* Bottom Nav */}
       {!hideNav && (
-        <nav className="fixed bottom-0 w-full max-w-md z-50 bg-surface/80 backdrop-blur-md rounded-t-2xl shadow-[0_-4px_32px_rgba(23,29,20,0.06)] flex justify-around items-end pb-6 pt-2 px-4">
+        <nav className="fixed bottom-0 w-full max-w-md z-50 bg-surface/95 backdrop-blur-lg border-t border-outline-variant/10 flex justify-around items-center py-4 px-4 shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             const Icon = item.icon;
@@ -84,15 +96,21 @@ export default function Layout({ children, showBack, title, hideNav, hideLangTog
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className={cn(
-                  "flex flex-col items-center justify-center transition-all duration-300",
-                  isActive 
-                    ? "bg-gradient-to-br from-primary to-primary-container text-white rounded-2xl px-5 py-2.5 -translate-y-2 shadow-lg"
-                    : "text-on-surface/50 px-4 py-2 hover:text-primary scale-90 active:scale-110"
-                )}
+                className="flex flex-col items-center justify-center gap-1 min-w-[70px] relative"
               >
-                <Icon className={cn("w-6 h-6", isActive && "fill-current")} />
-                <span className="font-sans font-medium text-[10px] uppercase tracking-wider mt-1">
+                <div className={cn(
+                  "w-16 h-8 flex items-center justify-center rounded-full transition-all duration-300",
+                  isActive ? "bg-primary/20" : "bg-transparent"
+                )}>
+                  <Icon className={cn(
+                    "w-6 h-6 transition-colors duration-300",
+                    isActive ? "text-primary fill-primary/10" : "text-on-surface/60"
+                  )} />
+                </div>
+                <span className={cn(
+                  "font-sans font-bold text-[11px] transition-colors duration-300",
+                  isActive ? "text-on-surface" : "text-on-surface/60"
+                )}>
                   {item.label}
                 </span>
               </button>

@@ -2,26 +2,25 @@ import { useState, useRef, useEffect, ChangeEvent } from 'react';
 import Anthropic from '@anthropic-ai/sdk';
 import {
   Camera,
-  Leaf,
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Scan,
   RefreshCw,
   ShieldCheck,
   Sprout,
-  FlaskConical,
   ThumbsUp,
   ChevronRight,
   Save,
   MapPin,
+  ScanLine,
+  Zap,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Layout from '../components/Layout';
 import { cn } from '../lib/utils';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { getUserFields, updateField, getPlantedCrops } from '../lib/db';
+import { getUserFields, updateField, getPlantedCrops, saveDiseaseDetectionRecord } from '../lib/db';
 import type { PlantedCrop } from '../lib/db';
 import type { Field } from '../types';
 
@@ -50,6 +49,9 @@ export default function DiseaseDetection() {
   const [plantedCrops, setPlantedCrops] = useState<PlantedCrop[]>([]);
   const [saving, setSaving] = useState(false);
   const [savedOk, setSavedOk] = useState(false);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [autoSaved, setAutoSaved] = useState(false);
+  const imageBlobRef = useRef<Blob | null>(null);
   const [suspectedDisease, setSuspectedDisease] = useState<string>('');
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctedDisease, setCorrectedDisease] = useState<string>('');
@@ -133,6 +135,7 @@ export default function DiseaseDetection() {
     try {
       const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
       const blob = await fetch(image).then(r => r.blob());
+      imageBlobRef.current = blob;
       const base64Data = await new Promise<string>((resolve) => {
         const reader = new FileReader();
         reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
@@ -209,6 +212,15 @@ If the image is NOT a plant/leaf, return {"error": "Please upload a clear photo 
       if (data.error) throw new Error(data.error);
 
       setPrediction(data);
+
+      // Auto-save image + diagnosis to Firebase
+      if (uid && imageBlobRef.current) {
+        setAutoSaving(true);
+        saveDiseaseDetectionRecord(uid, imageBlobRef.current, data, selectedFieldId || undefined)
+          .then(_id => setAutoSaved(true))
+          .catch(e => console.error('Auto-save detection failed:', e))
+          .finally(() => setAutoSaving(false));
+      }
     } catch (err: any) {
       const isBusy = err.message?.includes('503') || err.message?.toLowerCase().includes('overloaded');
       setError(isBusy
@@ -297,107 +309,149 @@ Return ONLY valid JSON:
     }
   };
 
-  const severityColor = {
-    low: 'bg-green-500',
-    medium: 'bg-amber-500',
-    high: 'bg-red-500',
+  const severityBadge = {
+    low:    'bg-green-100 text-green-700 border-green-200',
+    medium: 'bg-amber-100 text-amber-700 border-amber-200',
+    high:   'bg-red-100 text-red-700 border-red-200',
   };
-  const severityBg = {
-    low: 'bg-green-50 text-green-800 border-green-200',
-    medium: 'bg-amber-50 text-amber-800 border-amber-200',
-    high: 'bg-red-50 text-red-700 border-red-200',
+
+  const confidenceNum = parseInt(prediction?.confidence ?? '0') || 0;
+  const ringR = 32;
+  const ringCirc = 2 * Math.PI * ringR;
+  const ringDash = (confidenceNum / 100) * ringCirc;
+
+  const resetScan = () => {
+    setImage(null); setPrediction(null); setSavedOk(false);
+    setSuspectedDisease(''); setCorrectionOpen(false);
+    setCorrectedDisease(''); setIsCorrected(false);
+    setAutoSaved(false); imageBlobRef.current = null;
   };
 
   return (
-    <Layout title="Vision AI Scanner" showBack>
-      <div className="min-h-screen bg-surface px-5 py-4 pb-28 space-y-6">
+    <Layout title="Disease scan" showBack>
+      <div className="bg-[#f5f5f0] min-h-screen pb-28 space-y-4 px-4 pt-2">
 
-        {/* Header */}
-        <section className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="p-2 bg-primary/10 rounded-xl text-primary"><Scan className="w-5 h-5" /></span>
-            <span className="text-[10px] font-black text-primary uppercase tracking-widest">Next-Gen Vision AI</span>
-          </div>
-          <h1 className="text-4xl font-black text-on-surface leading-tight">
-            Protect Your <span className="text-primary italic">Harvest</span>
-          </h1>
-          <p className="text-on-surface-variant text-sm font-medium">Upload a leaf photo for instant AI disease diagnosis, treatment steps & prevention tips.</p>
-        </section>
-
-        {/* Upload Card */}
-        <motion.div layout className="bg-white rounded-[2.5rem] p-5 shadow-xl border border-white/50 relative overflow-hidden">
+        {/* ── Upload / Image card ── */}
+        <motion.div layout className="rounded-3xl overflow-hidden shadow-sm">
           {!image ? (
+            /* Empty state */
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="aspect-square rounded-[2rem] border-2 border-dashed border-primary/20 bg-primary/5 flex flex-col items-center justify-center gap-4 cursor-pointer hover:bg-primary/10 transition-all active:scale-95"
+              className="bg-[#1a2e1a] aspect-[4/3] flex flex-col items-center justify-center gap-4 cursor-pointer active:opacity-80 transition-opacity"
             >
-              <div className="p-6 bg-white rounded-full shadow-lg"><Camera className="w-8 h-8 text-primary" /></div>
+              <div className="w-16 h-16 rounded-2xl bg-white/10 border-2 border-dashed border-white/30 flex items-center justify-center">
+                <Camera className="w-7 h-7 text-white/70" />
+              </div>
               <div className="text-center">
-                <p className="font-bold text-on-surface">Upload Leaf Photo</p>
-                <p className="text-xs text-on-surface-variant">Focus clearly on the affected area</p>
+                <p className="text-white font-bold text-sm">Upload a leaf photo</p>
+                <p className="text-white/50 text-xs mt-0.5">JPG, PNG or WEBP · Focus on affected area</p>
+              </div>
+              <div className="flex items-center gap-1.5 bg-white/10 px-4 py-2 rounded-full mt-1">
+                <ScanLine className="w-3.5 h-3.5 text-white/70" />
+                <span className="text-white/70 text-xs font-bold uppercase tracking-wider">VISION AI v2.0</span>
               </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="relative aspect-square rounded-[2rem] overflow-hidden border-4 border-white shadow-2xl">
-                <img src={image} className="w-full h-full object-cover" alt="Uploaded leaf" />
+            /* Image with overlay */
+            <div className="relative bg-[#1a2e1a]">
+              <div className="aspect-[4/3] relative overflow-hidden">
+                <img src={image} className="w-full h-full object-cover opacity-90" alt="Leaf" />
+
+                {/* Scanning overlay */}
                 {loading && (
-                  <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex flex-col items-center justify-center text-white">
-                    <Loader2 className="w-12 h-12 animate-spin mb-3" />
-                    <span className="font-black text-xs uppercase tracking-widest">AI Pathologist Analyzing…</span>
+                  <div className="absolute inset-0 bg-[#1a2e1a]/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                    <div className="w-16 h-16 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+                    <p className="text-white font-bold text-xs uppercase tracking-widest">Analyzing…</p>
+                  </div>
+                )}
+
+                {/* Lesion badge */}
+                {prediction && !loading && (
+                  <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    <div className="relative flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-full border-2 border-red-400 bg-red-500/20 animate-pulse" />
+                      <div className="absolute bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md -top-6 whitespace-nowrap">
+                        LESION {prediction.confidence}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
-              {!loading && !prediction && (
-                <div className="flex gap-3">
-                  <button onClick={() => { setImage(null); setPrediction(null); }} className="flex-1 py-4 bg-surface-container text-on-surface font-bold rounded-2xl flex justify-center gap-2">
-                    <RefreshCw className="w-4 h-4" /> Retake
-                  </button>
-                  <button onClick={analyzeImage} className="flex-[2] py-4 bg-primary text-on-primary font-bold rounded-2xl flex justify-center gap-2 shadow-lg shadow-primary/30">
-                    <CheckCircle2 className="w-4 h-4" /> Scan with AI
-                  </button>
+
+              {/* Bottom bar */}
+              <div className="flex items-center justify-between px-4 py-3 bg-[#111c11]">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">VISION AI v2.0</span>
                 </div>
-              )}
-              {prediction && (
-                <button onClick={() => { setImage(null); setPrediction(null); setSavedOk(false); setSuspectedDisease(''); setCorrectionOpen(false); setCorrectedDisease(''); setIsCorrected(false); }} className="w-full py-3 bg-surface-container text-on-surface font-bold rounded-2xl flex justify-center gap-2">
-                  <Camera className="w-4 h-4" /> Scan Another Leaf
-                </button>
-              )}
+                <div className="flex items-center gap-2">
+                  {autoSaving && (
+                    <span className="text-white/40 text-[10px] font-bold uppercase tracking-wider">Saving…</span>
+                  )}
+                  {autoSaved && !autoSaving && (
+                    <span className="text-primary text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Saved
+                    </span>
+                  )}
+                  {prediction && (
+                    <span className="text-white/60 text-[10px] font-bold uppercase tracking-wider">
+                      {prediction.treatmentSteps.length} STEPS
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="px-4 pb-4 pt-2 bg-[#111c11] flex gap-2">
+                {!loading && !prediction && (
+                  <>
+                    <button onClick={resetScan} className="flex-1 py-3 bg-white/10 text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform">
+                      <RefreshCw className="w-4 h-4" /> Retake
+                    </button>
+                    <button onClick={analyzeImage} className="flex-[2] py-3 bg-primary text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform shadow-lg shadow-primary/30">
+                      <ScanLine className="w-4 h-4" /> Scan with AI
+                    </button>
+                  </>
+                )}
+                {prediction && !loading && (
+                  <button onClick={resetScan} className="flex-1 py-3 bg-white/10 text-white font-bold rounded-2xl flex items-center justify-center gap-2 text-sm active:scale-95 transition-transform">
+                    <Camera className="w-4 h-4" /> Scan another leaf
+                  </button>
+                )}
+              </div>
             </div>
           )}
           <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
         </motion.div>
 
-        {/* Suspected Disease Hint */}
-        {image && !prediction && (
-          <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] p-5 shadow-md border border-outline-variant/10 space-y-2">
-            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">
-              Suspected Disease <span className="font-normal normal-case text-on-surface-variant/60">(optional)</span>
+        {/* ── Suspected disease hint (before scan) ── */}
+        {image && !prediction && !loading && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-4 border border-outline-variant/10 shadow-sm space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60">
+              Suspected Disease <span className="font-normal normal-case">(optional)</span>
             </p>
             <input
               type="text"
               value={suspectedDisease}
               onChange={(e: ChangeEvent<HTMLInputElement>) => setSuspectedDisease(e.target.value)}
               placeholder="e.g. Anthracnose / অ্যানথ্রাকনোজ"
-              className="w-full bg-surface-container-low rounded-xl px-4 py-3 text-sm font-medium border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/40"
+              className="w-full bg-[#f5f5f0] rounded-xl px-4 py-3 text-sm font-medium border border-outline-variant/10 focus:outline-none focus:ring-2 focus:ring-primary/20 placeholder:text-on-surface-variant/30"
             />
-            <p className="text-[10px] text-on-surface-variant/60">If you already suspect a disease, type it here to guide the AI.</p>
           </motion.div>
         )}
 
-        {/* Field Context Selector */}
+        {/* ── Field context (before scan) ── */}
         {uid && fields.length > 0 && !prediction && (
-          <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2.5rem] p-5 shadow-md border border-outline-variant/10 space-y-3">
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-3xl p-4 border border-outline-variant/10 shadow-sm space-y-3">
             <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-primary/10 rounded-lg text-primary"><MapPin className="w-4 h-4" /></span>
+              <MapPin className="w-4 h-4 text-primary" />
               <span className="text-[10px] font-black uppercase tracking-widest text-primary">Field Context</span>
-              <span className="ml-auto text-[10px] text-on-surface-variant font-medium">Optional</span>
+              <span className="ml-auto text-[10px] text-on-surface-variant/50 font-medium">Optional</span>
             </div>
-            <p className="text-xs text-on-surface-variant">Select a field so the AI can use your soil type, planted crops, and history for a more accurate diagnosis.</p>
             <select
               value={selectedFieldId}
               onChange={(e: ChangeEvent<HTMLSelectElement>) => setSelectedFieldId(e.target.value)}
-              className="w-full bg-surface-container-low rounded-xl px-4 py-3 text-sm font-bold border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full bg-[#f5f5f0] rounded-xl px-4 py-3 text-sm font-bold border border-outline-variant/10 focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="">— No field selected —</option>
               {fields.map((f: Field) => (
@@ -415,167 +469,171 @@ Return ONLY valid JSON:
                   {growing.length > 0 && (
                     <p><span className="font-bold text-on-surface">Growing:</span> {growing.map((c: PlantedCrop) => `${c.cropName} (${Math.floor((Date.now() - new Date(c.plantedDate).getTime()) / 86400000)}d)`).join(', ')}</p>
                   )}
-                  {f.health_status && f.health_status !== 'unknown' && (
-                    <p><span className="font-bold text-on-surface">Last health status:</span> {f.health_status.replace('_', ' ')}</p>
-                  )}
                 </div>
               );
             })()}
           </motion.div>
         )}
 
-        {/* Error */}
+        {/* ── Error ── */}
         <AnimatePresence>
           {error && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-50 text-red-700 p-4 rounded-2xl flex gap-3 border border-red-200">
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-red-50 text-red-700 p-4 rounded-2xl flex gap-3 border border-red-200">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <p className="text-sm font-bold">{error}</p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Results */}
+        {/* ── Results ── */}
         <AnimatePresence>
           {prediction && (
-            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="space-y-5 pb-6">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 pb-4">
 
-              {/* Diagnosis Card */}
-              <div className="bg-white rounded-[2.5rem] p-7 shadow-xl relative overflow-hidden">
-                <div className={cn('absolute top-6 right-6 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border', severityBg[prediction.severity])}>
-                  {prediction.severity} severity
+              {/* ── Diagnosis card ── */}
+              <div className="bg-white rounded-3xl p-5 shadow-sm border border-outline-variant/10">
+
+                {/* Top row: label + severity */}
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">Diagnosis</span>
+                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-black border', severityBadge[prediction.severity])}>
+                    {prediction.severity} severity
+                  </span>
                 </div>
 
-                <div className="space-y-5">
-                  {/* Disease name + correction */}
-                  <div>
-                    <p className="text-primary font-bold text-[10px] uppercase tracking-widest mb-1 flex items-center gap-1">
-                      <Leaf className="w-3 h-3" /> Diagnosis
-                      {prediction.diagnosisCategory && (
-                        <span className="ml-auto bg-surface-container text-on-surface-variant/70 px-2 py-0.5 rounded-full text-[9px] font-bold">{prediction.diagnosisCategory}</span>
-                      )}
-                    </p>
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <h2 className="text-3xl font-black text-on-surface leading-tight">{prediction.disease}</h2>
-                      {isCorrected && (
-                        <span className="mt-2 px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-widest rounded-full border border-amber-200 shrink-0">
-                          Farmer corrected
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-on-surface-variant font-medium mt-1">Affected Crop: <span className="font-bold text-on-surface">{prediction.affectedCrop}</span></p>
+                {/* Disease name */}
+                <h2 className="text-2xl font-black text-on-surface leading-tight">{prediction.disease}</h2>
+                <p className="text-primary text-xs font-bold mt-0.5">
+                  {prediction.diagnosisCategory || 'Disease'} · {prediction.affectedCrop}
+                </p>
 
-                    {!isCorrected && (
-                      <button
-                        onClick={() => { setCorrectedDisease(prediction.disease); setCorrectionOpen((v: boolean) => !v); }}
-                        className="mt-2 text-[11px] text-on-surface-variant/50 underline underline-offset-2 hover:text-red-600 transition-colors"
-                      >
-                        Incorrect diagnosis?
-                      </button>
-                    )}
+                {/* Correction */}
+                {!isCorrected && (
+                  <button
+                    onClick={() => { setCorrectedDisease(prediction.disease); setCorrectionOpen((v: boolean) => !v); }}
+                    className="mt-1 text-[11px] text-on-surface-variant/40 underline underline-offset-2"
+                  >
+                    Incorrect diagnosis?
+                  </button>
+                )}
+                {isCorrected && (
+                  <span className="inline-block mt-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-widest rounded-full border border-amber-200">
+                    Farmer corrected
+                  </span>
+                )}
 
-                    <AnimatePresence>
-                      {correctionOpen && !isCorrected && (
-                        <motion.div key="correction-form" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                          <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
-                            <p className="text-xs font-bold text-amber-800">Enter the correct disease name:</p>
-                            <input
-                              type="text"
-                              value={correctedDisease}
-                              onChange={(e: ChangeEvent<HTMLInputElement>) => setCorrectedDisease(e.target.value)}
-                              placeholder="e.g. Anthracnose / অ্যানথ্রাকনোজ"
-                              className="w-full bg-white rounded-xl px-3 py-2.5 text-sm font-medium border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
-                            />
-                            <button
-                              onClick={regenerateTreatmentPlan}
-                              disabled={correcting || !correctedDisease.trim()}
-                              className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-transform text-sm"
-                            >
-                              {correcting
-                                ? <><Loader2 className="w-4 h-4 animate-spin" /> Regenerating…</>
-                                : <><RefreshCw className="w-4 h-4" /> Regenerate Treatment Plan</>}
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Confidence bar */}
-                  <div>
-                    <div className="flex justify-between text-xs font-bold text-on-surface-variant mb-1">
-                      <span>AI Confidence</span>
-                      <span className="text-primary">{prediction.confidence}</span>
-                    </div>
-                    <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: prediction.confidence }}
-                        transition={{ duration: 0.8, delay: 0.3 }}
-                        className={cn('h-full rounded-full', severityColor[prediction.severity])}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Severity indicator */}
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['low', 'medium', 'high'] as const).map(s => (
-                      <div key={s} className={cn('p-2 rounded-xl text-center text-[10px] font-black uppercase tracking-wider border', prediction.severity === s ? severityBg[s] : 'bg-surface-container text-on-surface-variant/40 border-transparent')}>
-                        {s}
+                <AnimatePresence>
+                  {correctionOpen && !isCorrected && (
+                    <motion.div key="corr" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                      <div className="mt-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-3">
+                        <p className="text-xs font-bold text-amber-800">Enter the correct disease name:</p>
+                        <input
+                          type="text"
+                          value={correctedDisease}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setCorrectedDisease(e.target.value)}
+                          placeholder="e.g. Anthracnose"
+                          className="w-full bg-white rounded-xl px-3 py-2.5 text-sm font-medium border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                        />
+                        <button
+                          onClick={regenerateTreatmentPlan}
+                          disabled={correcting || !correctedDisease.trim()}
+                          className="w-full py-3 bg-amber-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 disabled:opacity-40 text-sm active:scale-[0.98] transition-transform"
+                        >
+                          {correcting ? <><Loader2 className="w-4 h-4 animate-spin" /> Regenerating…</> : <><RefreshCw className="w-4 h-4" /> Regenerate Plan</>}
+                        </button>
                       </div>
-                    ))}
-                  </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                  <p className="text-on-surface-variant font-medium leading-relaxed text-sm">{prediction.description}</p>
+                {/* Confidence ring + description */}
+                <div className="flex items-center gap-4 mt-4">
+                  <div className="relative flex-shrink-0">
+                    <svg width="80" height="80" className="-rotate-90">
+                      <circle cx="40" cy="40" r={ringR} fill="none" stroke="#e5e7eb" strokeWidth="7" />
+                      <motion.circle
+                        cx="40" cy="40" r={ringR}
+                        fill="none" stroke="#0d631b" strokeWidth="7"
+                        strokeLinecap="round"
+                        strokeDasharray={ringCirc}
+                        initial={{ strokeDashoffset: ringCirc }}
+                        animate={{ strokeDashoffset: ringCirc - ringDash }}
+                        transition={{ duration: 1, delay: 0.3, ease: 'easeOut' }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center rotate-0">
+                      <span className="text-base font-black text-on-surface">{prediction.confidence}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-on-surface-variant font-medium leading-relaxed flex-1">
+                    {prediction.description}
+                  </p>
                 </div>
               </div>
 
-              {/* Treatment Steps */}
-              <div className="bg-white rounded-[2.5rem] p-7 shadow-xl space-y-4">
-                <h3 className="font-black text-lg flex items-center gap-2 text-primary">
-                  <FlaskConical className="w-5 h-5" /> Treatment Plan
-                </h3>
-                <div className="space-y-3">
+              {/* ── Treatment plan ── */}
+              <div className="bg-white rounded-3xl p-5 shadow-sm border border-outline-variant/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-black text-base text-on-surface">Treatment plan</h3>
+                  <span className="bg-[#f0f0eb] text-on-surface-variant text-[10px] font-black px-2.5 py-1 rounded-full">
+                    {prediction.treatmentSteps.length} steps
+                  </span>
+                </div>
+
+                <div className="space-y-2">
                   {prediction.treatmentSteps.map((step, i) => (
                     <motion.div
                       key={i}
-                      initial={{ opacity: 0, x: -10 }}
+                      initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="flex gap-3 items-start bg-primary/5 rounded-2xl p-4 border border-primary/10"
+                      transition={{ delay: i * 0.08 }}
+                      className="flex gap-3 items-start py-2"
                     >
-                      <span className="w-7 h-7 shrink-0 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center">{i + 1}</span>
-                      <p className="text-sm font-medium text-on-surface leading-snug">{step}</p>
+                      {/* Step marker */}
+                      {i === 0 ? (
+                        <div className="w-7 h-7 shrink-0 rounded-full bg-red-500 text-white text-[10px] font-black flex items-center justify-center mt-0.5">
+                          !
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 shrink-0 rounded-full bg-primary/10 text-primary text-[10px] font-black flex items-center justify-center mt-0.5">
+                          {i + 1}
+                        </div>
+                      )}
+                      <p className="text-sm font-medium text-on-surface leading-snug flex-1">
+                        {i === 0
+                          ? <>{step.replace(/immediately/gi, '')} <span className="font-black text-red-600">immediately</span></>
+                          : step}
+                      </p>
                     </motion.div>
                   ))}
                 </div>
               </div>
 
-              {/* Prevention Tips */}
-              <div className="bg-green-50 rounded-[2.5rem] p-7 border border-green-200 space-y-4">
-                <h3 className="font-black text-lg flex items-center gap-2 text-green-800">
-                  <ShieldCheck className="w-5 h-5" /> Prevention Tips
+              {/* ── Prevention tips ── */}
+              <div className="bg-[#f0f7f0] rounded-3xl p-5 border border-green-200/60 space-y-3">
+                <h3 className="font-black text-base text-green-800 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4" /> Prevention Tips
                 </h3>
                 <ul className="space-y-2">
                   {prediction.preventionTips.map((tip, i) => (
-                    <li key={i} className="flex gap-2 items-start text-sm text-green-800 font-medium">
-                      <ThumbsUp className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
+                    <li key={i} className="flex gap-2.5 items-start text-sm text-green-800 font-medium">
+                      <ThumbsUp className="w-3.5 h-3.5 shrink-0 mt-0.5 text-green-600" />
                       {tip}
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* Save to Field */}
+              {/* ── Save to field ── */}
               {fields.length > 0 && (
-                <div className="bg-white rounded-[2.5rem] p-6 shadow-md border border-outline-variant/10 space-y-3">
-                  <h3 className="font-black text-base flex items-center gap-2">
-                    <Sprout className="w-5 h-5 text-primary" /> Update Field Health Status
+                <div className="bg-white rounded-3xl p-5 shadow-sm border border-outline-variant/10 space-y-3">
+                  <h3 className="font-black text-sm flex items-center gap-2">
+                    <Sprout className="w-4 h-4 text-primary" /> Update Field Health
                   </h3>
-                  <p className="text-xs text-on-surface-variant">Mark a field as affected to track its health on your dashboard.</p>
                   <select
                     value={selectedFieldId}
                     onChange={e => setSelectedFieldId(e.target.value)}
-                    className="w-full bg-surface-container-low rounded-xl px-4 py-3 text-sm font-bold border border-outline-variant/20 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    className="w-full bg-[#f5f5f0] rounded-xl px-4 py-3 text-sm font-bold border border-outline-variant/10 focus:outline-none focus:ring-2 focus:ring-primary/20"
                   >
                     <option value="">— Select a field —</option>
                     {fields.map(f => (
@@ -584,40 +642,42 @@ Return ONLY valid JSON:
                   </select>
                   {savedOk ? (
                     <div className="flex items-center gap-2 text-green-700 font-bold text-sm bg-green-50 p-3 rounded-xl">
-                      <CheckCircle2 className="w-5 h-5" /> Field health updated successfully!
+                      <CheckCircle2 className="w-4 h-4" /> Field updated successfully!
                     </div>
                   ) : (
                     <button
                       onClick={handleSaveToField}
                       disabled={!selectedFieldId || saving}
-                      className="w-full bg-primary text-white py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-transform"
+                      className="w-full bg-primary text-white py-3.5 rounded-2xl font-bold flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[0.98] transition-transform text-sm"
                     >
                       {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                      {saving ? 'Saving…' : 'Save Health Report to Field'}
+                      {saving ? 'Saving…' : 'Save Health Report'}
                     </button>
                   )}
                 </div>
               )}
 
-              {/* Navigate to crop recommendation */}
+              {/* ── Crop recommendations link ── */}
               <button
                 onClick={() => navigate('/tools/crops')}
-                className="w-full flex items-center justify-between bg-surface-container-low rounded-2xl px-5 py-4 border border-outline-variant/20 hover:border-primary/30 transition-all"
+                className="w-full flex items-center justify-between bg-white rounded-3xl px-5 py-4 border border-outline-variant/10 shadow-sm active:scale-[0.98] transition-transform"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <div className="w-10 h-10 bg-primary/10 rounded-2xl flex items-center justify-center">
                     <Sprout className="w-5 h-5 text-primary" />
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-sm text-on-surface">Get Crop Recommendations</p>
-                    <p className="text-xs text-on-surface-variant">Find disease-resistant crops for this field</p>
+                    <p className="text-xs text-on-surface-variant/60">Find disease-resistant crops</p>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-on-surface-variant/40" />
+                <ChevronRight className="w-5 h-5 text-on-surface-variant/30" />
               </button>
+
             </motion.div>
           )}
         </AnimatePresence>
+
       </div>
     </Layout>
   );
