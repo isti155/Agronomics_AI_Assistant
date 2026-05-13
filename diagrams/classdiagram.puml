@@ -1,0 +1,409 @@
+@startuml Agronomics_ClassDiagram
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 9
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam padding 2
+skinparam nodesep 10
+skinparam ranksep 18
+skinparam class {
+  BackgroundColor       #E8EEF8
+  BorderColor           #1A2E4A
+  BorderThickness       1.2
+  HeaderBackgroundColor #1A2E4A
+  HeaderFontColor       #FFFFFF
+  HeaderFontSize        10
+  HeaderFontStyle       bold
+  AttributeFontSize     9
+  AttributeFontColor    #1C1C1C
+  StereotypeFontColor   #B8860B
+  StereotypeFontSize    8
+}
+skinparam enum {
+  BackgroundColor       #FEF9EC
+  BorderColor           #B8860B
+  HeaderBackgroundColor #B8860B
+  HeaderFontColor       #FFFFFF
+  HeaderFontSize        9
+}
+skinparam package {
+  BackgroundColor #F7F9FC
+  BorderColor     #7B93B0
+  BorderThickness 1
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        10
+}
+skinparam arrow {
+  Color     #1A2E4A
+  Thickness 1.2
+}
+skinparam note {
+  BackgroundColor #FFFBF0
+  BorderColor     #B8860B
+  FontSize        8
+}
+
+hide empty methods
+
+package "Enumerations" <<Frame>> #FFFEF5 {
+  enum Language {
+    EN
+    BN
+  }
+  enum UserRole {
+    FARMER
+    EXPERT
+    ADMIN
+  }
+  enum HealthStatus {
+    HEALTHY
+    ATTENTION_NEEDED
+    CRITICAL
+    UNKNOWN
+  }
+  enum CropStatus {
+    GROWING
+    HARVESTED
+    ATTENTION_NEEDED
+    FAILED
+  }
+  enum Severity {
+    MILD
+    MODERATE
+    SEVERE
+    CRITICAL
+  }
+  enum AiRequestType {
+    DISEASE_DETECTION
+    CROP_RECOMMENDATION
+    ROADMAP_GENERATION
+  }
+  enum InputMode {
+    POLYGON
+    SIMPLE
+  }
+  enum Season {
+    KHARIF
+    RABI
+    BORO
+    AMAN
+    AUS
+  }
+  enum PriceTrend {
+    UP
+    DOWN
+    STABLE
+  }
+  enum AiRequestStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
+  }
+}
+
+package "Value Objects" <<Frame>> #F5F5FF {
+  class GeoPoint <<VO>> {
+    + lat : number
+    + lng : number
+    + altitude : number
+  }
+  class SoilSummary <<VO>> {
+    + type : string
+    + ph   : number
+  }
+  class SoilInput <<VO>> {
+    + soilType   : string
+    + ph         : number
+    + nitrogen   : number
+    + phosphorus : number
+    + potassium  : number
+    + moisture   : number
+    + fertility  : string
+  }
+  class WeatherSnapshot <<VO>> {
+    + temp       : number
+    + humidity   : number
+    + city       : string
+    + conditions : string
+    + fetched_at : Date
+  }
+  class UserRegion <<VO>> {
+    + district : string
+    + lat      : number
+    + lng      : number
+    + geo_hash : string
+  }
+}
+
+package "User Domain" <<Frame>> #EDF4FF {
+  class UserProfile {
+    + uid         : string
+    + name        : string
+    + email       : string
+    + phone       : string
+    + district    : string
+    + created_at  : Timestamp
+    + last_active : Timestamp
+    --
+    + role   : UserRole
+    + region : UserRegion
+  }
+  class UserSettings {
+    + language           : Language
+    + preferred_crops    : string[]
+    + notification_level : string
+    + units              : string
+  }
+}
+
+package "Field Domain" <<Frame>> #E0F0FF {
+  class Field {
+    + field_id    : string
+    + field_name  : string
+    + area_size   : number
+    + area_unit   : string
+    + active_crop : string
+    + created_at  : Timestamp
+    --
+    + center_point  : GeoPoint
+    + soil_summary  : SoilSummary
+    + health_status : HealthStatus
+    + input_mode    : InputMode
+  }
+  class FieldPolygon {
+    + points          : GeoPoint[]
+    + calculated_area : number
+    + area_unit       : string
+  }
+  class CropCycle {
+    + cycle_id      : string
+    + crop_name     : string
+    + variety       : string
+    + start_date    : Date
+    + end_date      : Date
+    + growth_stage  : string
+    + growth_pct    : number
+    + actual_yield_kg: number
+    --
+    + status : CropStatus
+    + season : Season
+  }
+  class RoadmapPhase {
+    + phase_id     : string
+    + phase_name   : string
+    + duration_days: number
+    + expert_tips  : string[]
+    + completed    : boolean
+    + order_index  : number
+  }
+  class RoadmapTask {
+    + task_id      : string
+    + description  : string
+    + completed    : boolean
+    + completed_at : Timestamp
+  }
+}
+
+package "Crop Advisory Domain" <<Frame>> #FEF9EC {
+  class CropRecHistoryEntry {
+    + id           : string
+    + field_id     : string
+    + field_name   : string
+    + season       : string
+    + summary      : string
+    + generated_at : Timestamp
+    --
+    + soil    : SoilInput
+    + weather : WeatherSnapshot
+  }
+  class CropRecResult <<VO>> {
+    + cropName        : string
+    + cropNameBn      : string
+    + suitability     : number
+    + growingSeason   : string
+    + expectedYield   : string
+    + estimatedProfit : string
+    + riskLevel       : string
+    + reasons         : string[]
+  }
+  class PlantedCrop {
+    + id                  : string
+    + cropName            : string
+    + fieldId             : string
+    + plantedDate         : Date
+    + expectedHarvestDate : Date
+    + created_at          : Timestamp
+    --
+    + status : CropStatus
+  }
+}
+
+package "Disease Detection Domain" <<Frame>> #FFF0F0 {
+  class DiseaseDetection {
+    + id           : string
+    + field_id     : string
+    + disease_name : string
+    + confidence   : number
+    + treatment    : string[]
+    + created_at   : Timestamp
+    --
+    + severity : Severity
+  }
+  class DetectionRecord {
+    + id                : string
+    + image_base64      : string
+    + disease           : string
+    + confidence        : number
+    + affected_crop     : string
+    + treatment_steps   : string[]
+    + prevention_tips   : string[]
+    + field_id          : string
+    + created_at        : Timestamp
+    --
+    + severity : Severity
+  }
+  class FarmerCorrection {
+    + original_disease    : string
+    + corrected_disease   : string
+    + corrected_treatment : string[]
+    + corrected_at        : Timestamp
+  }
+}
+
+package "AI Infrastructure Domain" <<Frame>> #F3EEFF {
+  class AiRequest {
+    + request_id : string
+    + user_id    : string
+    + field_id   : string
+    + input      : object
+    + retry_count: number
+    + created_at : Timestamp
+    --
+    + type   : AiRequestType
+    + status : AiRequestStatus
+  }
+  class AiResult {
+    + result_id         : string
+    + request_id        : string
+    + output            : object
+    + model_version     : string
+    + inference_time_ms : number
+    + processed_at      : Timestamp
+    --
+    + type : AiRequestType
+  }
+  class PredictionFeedback {
+    + feedback_id      : string
+    + result_id        : string
+    + is_correct       : boolean
+    + user_rating      : number
+    + correction_label : string
+    + timestamp        : Timestamp
+  }
+}
+
+package "Voice Domain" <<Frame>> #F0FAF5 {
+  class VoiceSession {
+    + session_id      : string
+    + user_id         : string
+    + title           : string
+    + created_at      : Timestamp
+    + message_count   : number
+  }
+  class VoiceMessage {
+    + message_id : string
+    + session_id : string
+    + role       : string
+    + text       : string
+    + created_at : Timestamp
+  }
+}
+
+package "Reference Data" <<Frame>> #F7F7F7 {
+  class FarmingTip {
+    + tip_id       : string
+    + title        : string
+    + category     : string
+    + crops        : string[]
+    + body         : string
+    + is_featured  : boolean
+    + published_at : Timestamp
+    --
+    + season : Season
+  }
+  class MarketPrice {
+    + price_id     : string
+    + crop_name    : string
+    + district     : string
+    + price_per_kg : number
+    + market_name  : string
+    + recorded_at  : Timestamp
+    --
+    + trend : PriceTrend
+  }
+  class CropReference {
+    + crop_id           : string
+    + name              : string
+    + optimal_soil      : string
+    + ph_range_min      : number
+    + ph_range_max      : number
+    + growth_days       : number
+    + seasons           : Season[]
+  }
+}
+
+' Relationships
+UserProfile  "1" *-- "1"    UserSettings
+UserProfile  "1" *-- "1"    UserRegion
+UserProfile       -->        UserRole
+UserSettings      -->        Language
+UserProfile  "1" *-- "0..*" Field
+UserProfile  "1" *-- "0..*" CropRecHistoryEntry
+UserProfile  "1" *-- "0..*" DiseaseDetection
+UserProfile  "1" *-- "0..*" PlantedCrop
+UserProfile  "1" *-- "0..*" VoiceSession
+
+Field        "1" *-- "0..1" FieldPolygon
+Field        "1" *-- "0..*" CropCycle
+Field        "1" *-- "0..*" RoadmapPhase
+Field             -->        HealthStatus
+Field             -->        InputMode
+Field        "1" o-- "1"    GeoPoint
+Field        "1" o-- "1"    SoilSummary
+FieldPolygon "1" *-- "3..*" GeoPoint
+RoadmapPhase "1" *-- "1..*" RoadmapTask
+CropCycle         -->        CropStatus
+CropCycle         -->        Season
+
+CropRecHistoryEntry "1" *-- "1..3" CropRecResult
+CropRecHistoryEntry  o--          SoilInput
+CropRecHistoryEntry  o--          WeatherSnapshot
+PlantedCrop          -->          CropStatus
+
+DiseaseDetection "1" *-- "0..1" FarmerCorrection
+DiseaseDetection      -->        Severity
+DetectionRecord       -->        Severity
+
+AiRequest  "1" ..> "1"    AiResult
+AiResult   "1" ..> "0..1" PredictionFeedback
+AiRequest       -->        AiRequestType
+AiRequest       -->        AiRequestStatus
+AiResult        -->        AiRequestType
+AiResult   ..>  DiseaseDetection
+AiResult   ..>  CropRecHistoryEntry
+
+VoiceSession "1" *-- "0..*" VoiceMessage
+FarmingTip        -->        Season
+MarketPrice       -->        PriceTrend
+
+note bottom of DetectionRecord
+  image_base64: compressed to ≤400px JPEG 0.7
+  via HTML5 Canvas API (Firestore < 1 MB limit)
+end note
+
+@enduml

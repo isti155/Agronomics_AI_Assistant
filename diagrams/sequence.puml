@@ -1,0 +1,251 @@
+@startuml Agronomics_SequenceDiagram
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 9
+skinparam shadowing false
+skinparam sequenceArrowThickness 1.4
+skinparam responseMessageBelowArrow true
+skinparam maxMessageSize 180
+skinparam sequenceBoxBorderColor #1A2E4A
+skinparam sequenceGroupBorderThickness 1.2
+skinparam sequenceGroupFontSize 9
+skinparam sequenceGroupFontStyle bold
+
+skinparam participant {
+  BackgroundColor #E8EEF8
+  BorderColor     #1A2E4A
+  BorderThickness 1.2
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        9
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor     #1A2E4A
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        9
+}
+skinparam database {
+  BackgroundColor #E0F0FF
+  BorderColor     #1E40AF
+  FontColor       #1E40AF
+  FontStyle       bold
+  FontSize        9
+}
+skinparam collections {
+  BackgroundColor #F3EEFF
+  BorderColor     #6D28D9
+  FontColor       #6D28D9
+  FontStyle       bold
+  FontSize        9
+}
+skinparam note {
+  BackgroundColor #FFFBF0
+  BorderColor     #B8860B
+  FontSize        8
+}
+
+autonumber "<b>[00]"
+
+actor       "Farmer"                     as FARMER
+participant "Agronomics UI\n(React App)" as UI     #E8EEF8
+participant "AuthContext\n& AppContext"  as CTX    #D1FAE5
+database    "Firebase Auth"              as FBAUTH #BFDBFE
+database    "Firebase Firestore"         as FBFS   #BFDBFE
+participant "Device (GPS/Cam)"           as DEVICE #F3F4F6
+participant "OpenWeatherMap API"         as OWM    #D1FAE5
+collections "Anthropic Claude API\n(claude-sonnet-4-6)" as CLAUDE #EDE9FE
+
+' ─────────────────────────────────────────────────────
+group Phase 1 : App Launch & Authentication
+
+  FARMER -> UI : launch app
+  activate UI
+  UI -> CTX : init AppContext + AuthContext
+  activate CTX
+  CTX -> FBAUTH : onAuthStateChanged(callback)
+  activate FBAUTH
+
+  alt Session Exists (JWT valid)
+    FBAUTH --> CTX : currentUser (Firebase User)
+    deactivate FBAUTH
+    CTX -> FBFS : getUserProfile(uid)
+    activate FBFS
+    FBFS --> CTX : UserProfile { name, district, role }
+    deactivate FBFS
+    CTX -> FBFS : getUserSettings(uid)
+    activate FBFS
+    FBFS --> CTX : UserSettings { language, units }
+    deactivate FBFS
+    CTX -> UI : setLanguage(EN|BN)
+    note right of CTX : 250+ translation keys\nloaded from AppContext
+    UI -> FARMER : render Dashboard
+
+  else No Session
+    FBAUTH --> CTX : currentUser = null
+    deactivate FBAUTH
+    CTX -> UI : redirect /login
+    UI -> FARMER : render Login screen
+    FARMER -> UI : enter email + password
+    UI -> FBAUTH : signInWithEmailAndPassword(email, pwd)
+    activate FBAUTH
+    alt Valid credentials
+      FBAUTH --> UI : Firebase User (uid, email)
+      deactivate FBAUTH
+      UI -> CTX : setCurrentUser(user)
+      CTX -> FBFS : getUserProfile(uid)
+      activate FBFS
+      FBFS --> CTX : UserProfile
+      deactivate FBFS
+      UI -> FARMER : navigate /dashboard
+    else Invalid credentials
+      FBAUTH --> UI : AuthError (wrong-password)
+      deactivate FBAUTH
+      UI -> FARMER : show error banner
+    end
+  end
+
+end
+
+' ─────────────────────────────────────────────────────
+group Phase 2 : Dashboard Initialization
+
+  UI -> FBFS : getUserFields(uid)
+  activate FBFS
+  FBFS --> UI : Field[] (soil, GPS, health_status)
+  deactivate FBFS
+
+  UI -> UI : compute stats\n(totalFields, totalAcres, activeCrops)
+
+  opt Fields with GPS center_point exist
+    UI -> OWM : GET /weather?lat=&lon=&units=metric
+    activate OWM
+    OWM --> UI : { temp, humidity, city, conditions }
+    deactivate OWM
+    UI -> FARMER : render weather widget
+  end
+
+  UI -> FARMER : render dashboard\n(greeting, stat cards, tool grid, field list)
+
+end
+
+' ─────────────────────────────────────────────────────
+group Phase 3 : AI Crop Recommendation
+
+  FARMER -> UI : navigate /tools/crops
+  UI -> FBFS : getUserFields(uid)
+  activate FBFS
+  FBFS --> UI : Field[]
+  deactivate FBFS
+  UI -> FARMER : soil input form + field dropdown
+  FARMER -> UI : selectField + enterSoilData\n{ type, pH, N, P, K, moisture }
+  UI -> OWM : GET /weather?lat=&lon=&units=metric
+  activate OWM
+  OWM --> UI : { temp, humidity, conditions }
+  deactivate OWM
+  UI -> UI : buildCropPrompt(soil, weather, isoDate, seasonCalendar)
+  note right of UI
+    Bangladesh season rules in prompt:
+    • Rabi:     Nov–Feb (wheat, mustard)
+    • Kharif-1: Mar–Jun (boro rice, jute)
+    • Kharif-2: Jul–Oct (aman rice, maize)
+    Instruction: exclude out-of-season crops
+  end note
+  UI -> CLAUDE : messages.create(model: claude-sonnet-4-6,\nmessages: [{ role:user, content: prompt }])
+  activate CLAUDE
+  CLAUDE -> CLAUDE : LLM inference\n(soil + season + market scoring)
+  CLAUDE --> UI : CropRecResult[3] JSON\n{ cropName, suitability, reasons,\n  expectedYield, estimatedProfit }
+  deactivate CLAUDE
+  UI -> FBFS : saveCropRecommendation(uid, { field_id, soil, weather, results })
+  activate FBFS
+  FBFS --> UI : docRef.id
+  deactivate FBFS
+  UI -> FARMER : render 3 crop cards (suitability, yield, profit, risk)
+
+  opt Farmer syncs crop to field
+    FARMER -> UI : click "Sync to My Fields"
+    UI -> FBFS : updateField(uid, fieldId, { active_crop })
+    activate FBFS
+    FBFS --> UI : void
+    deactivate FBFS
+    UI -> FARMER : "Crop synced to field"
+  end
+
+end
+
+' ─────────────────────────────────────────────────────
+group Phase 4 : AI Disease Detection
+
+  FARMER -> UI : navigate /tools/scan
+  UI -> FARMER : render upload screen + field selector
+  FARMER -> DEVICE : trigger camera / file picker
+  activate DEVICE
+  DEVICE --> UI : image Blob (JPG/PNG)
+  deactivate DEVICE
+
+  UI -> UI : compressImageToBase64(blob, maxPx=400, q=0.7)
+  note right of UI
+    HTML5 Canvas API:
+    1. Draw image on canvas
+    2. Scale ≤ 400px (maintain ratio)
+    3. toDataURL('image/jpeg', 0.7)
+    Keeps Firestore doc < 1 MB
+  end note
+
+  opt Field context selected
+    UI -> FBFS : getField(uid, fieldId)
+    activate FBFS
+    FBFS --> UI : Field { name, active_crop, health_status }
+    deactivate FBFS
+  end
+
+  UI -> CLAUDE : messages.create(model: claude-sonnet-4-6,\ncontent: [ {image: base64}, {text: diagnosisPrompt} ])
+  activate CLAUDE
+  note right of CLAUDE
+    3-Stage Vision Analysis:
+    1 — Visual Classification (fungal/bacterial/viral/pest)
+    2 — Specific Diagnosis (crop + field context)
+    3 — Treatment Plan (BD-available products, 4 steps)
+  end note
+  CLAUDE -> CLAUDE : multimodal inference
+  CLAUDE --> UI : JSON { disease_name, confidence, severity,\n  treatment_steps[4], prevention_tips[3] }
+  deactivate CLAUDE
+
+  UI -> UI : parseResponse() → DetectionRecord
+  UI -> FARMER : render diagnosis card\n(confidence gauge, severity badge, treatment)
+
+  alt Farmer accepts diagnosis
+    UI -> FBFS : saveDiseaseDetection(uid, detection, fieldId)
+    activate FBFS
+    FBFS --> UI : detection doc ID
+    deactivate FBFS
+    UI -> FBFS : updateField(uid, fieldId, { health_status: mapSeverity })
+    activate FBFS
+    note right of UI
+      Severity → HealthStatus:
+      CRITICAL/SEVERE → "critical"
+      MODERATE        → "attention_needed"
+      MILD            → "healthy"
+    end note
+    FBFS --> UI : void
+    deactivate FBFS
+    UI -> FARMER : "Saved — field health updated"
+
+  else Farmer corrects diagnosis
+    FARMER -> UI : enter correct disease name
+    UI -> CLAUDE : messages.create(correction prompt:\n"Disease: {farmerInput}. Regenerate treatment.")
+    activate CLAUDE
+    CLAUDE --> UI : updated treatment_steps[] + prevention_tips[]
+    deactivate CLAUDE
+    UI -> FARMER : re-render with corrected plan
+  end
+
+end
+
+deactivate CTX
+deactivate UI
+
+@enduml

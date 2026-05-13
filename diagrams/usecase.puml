@@ -1,0 +1,204 @@
+@startuml Agronomics_UseCaseDiagram
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Segoe UI"
+skinparam defaultFontSize 9
+skinparam shadowing false
+skinparam padding 2
+skinparam nodesep 14
+skinparam ranksep 22
+
+skinparam usecase {
+  BackgroundColor #E8EEF8
+  BorderColor     #1A2E4A
+  BorderThickness 1.2
+  FontColor       #1A2E4A
+  FontSize        9
+}
+skinparam actor {
+  BackgroundColor #FFFFFF
+  BorderColor     #1A2E4A
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        9
+}
+skinparam rectangle {
+  BackgroundColor #FAFBFF
+  BorderColor     #1A2E4A
+  BorderThickness 1.8
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        10
+}
+skinparam package {
+  BackgroundColor #F0F4F8
+  BorderColor     #7B93B0
+  BorderThickness 1
+  FontColor       #1A2E4A
+  FontStyle       bold
+  FontSize        9
+}
+skinparam arrow {
+  Color     #1A2E4A
+  Thickness 1.2
+}
+skinparam note {
+  BackgroundColor #FFFBF0
+  BorderColor     #B8860B
+  FontSize        8
+}
+
+left to right direction
+
+actor "Farmer"                    as farmer
+actor ":Firebase Auth\n& Firestore"  as firebase   #1E3A6E
+actor ":Claude AI\n(Anthropic)"      as claude     #4C1D95
+actor ":OpenWeatherMap"              as owm        #064E3B
+actor ":Android Device\n(GPS/Cam)"   as device     #374151
+
+rectangle "«System»  Agronomics — AI Agricultural Intelligence Platform" {
+
+  package "Authentication" {
+    usecase "UC1 Register\n(Email + Profile)"  as UC_REG
+    usecase "UC2 Login\n(Email/Password)"      as UC_LOGIN
+    usecase "UC3 Login\n(Google OAuth)"        as UC_GOAUTH
+    usecase "UC4 Persist\nSession (JWT)"       as UC_SESSION
+    usecase "UC5 Logout"                       as UC_LOGOUT
+  }
+
+  package "Dashboard" {
+    usecase "UC6 View Farm\nDashboard"         as UC_DASH
+    usecase "UC7 View Field\nSummary Stats"    as UC_STATS
+    usecase "UC8 Navigate\nAI Tools Grid"      as UC_NAV
+  }
+
+  package "Field Management" {
+    usecase "UC9 Add Field\n(Simple Mode)"     as UC_F_SIMPLE
+    usecase "UC10 Map Field\n(GPS Walk)"       as UC_F_GPS
+    usecase "UC11 View Fields\non Tile Map"    as UC_F_MAP
+    usecase "UC12 Edit Field\nDetails"         as UC_F_EDIT
+    usecase "UC13 Delete Field"                as UC_F_DEL
+    usecase "UC14 Update Field\nHealth"        as UC_HEALTH
+    usecase "UC15 Generate\nRoadmap"           as UC_ROADMAP
+    usecase "UC16 Track Roadmap\nProgress"     as UC_RDTRACK
+  }
+
+  package "AI Crop Advisory" {
+    usecase "UC17 Enter Soil\nData (NPK/pH)"   as UC_SOIL
+    usecase "UC18 Auto-Fetch\nWeather (GPS)"   as UC_WFETCH
+    usecase "UC19 Get AI Crop\nRecommendation" as UC_CREC
+    usecase "UC20 View Rec\nHistory"           as UC_CHIST
+    usecase "UC21 Sync Crop\nto Field"         as UC_CSYNC
+    usecase "UC22 Track\nPlanted Crops"        as UC_CTRACK
+    usecase "UC23 View Crop\nDetail & Advice"  as UC_CDETAIL
+  }
+
+  package "AI Disease Detection" {
+    usecase "UC24 Upload/Capture\nLeaf Photo"  as UC_PHOTO
+    usecase "UC25 AI Disease\nDiagnosis"       as UC_DIAG
+    usecase "UC26 Correct AI\nDiagnosis"       as UC_CORRECT
+    usecase "UC27 Save Diagnosis\nto Field"    as UC_DSAVE
+    usecase "UC28 View Detection\nHistory"     as UC_DHIST
+  }
+
+  package "Knowledge & Advisory" {
+    usecase "UC29 Ask AI Farming\nQuestion"    as UC_ASK
+    usecase "UC30 Seasonal\nPest Calendar"     as UC_PEST
+    usecase "UC31 Farming\nQuick Guides"       as UC_GUIDE
+    usecase "UC32 AI Irrigation\nAdvice"       as UC_IRRIG
+    usecase "UC33 Weather\nForecast (3-Day)"   as UC_WEATHER
+    usecase "UC34 Voice AI\nAssistant"         as UC_VOICE
+  }
+
+  package "Profile & Settings" {
+    usecase "UC35 Edit Farmer\nProfile"        as UC_PROF
+    usecase "UC36 Toggle Language\n(EN/BN)"    as UC_LANG
+    usecase "UC37 App Settings\n& Notifs"      as UC_SETTINGS
+    usecase "UC38 View Farmer\nStats"          as UC_FSTATS
+  }
+
+}
+
+' Farmer associations
+farmer --> UC_REG
+farmer --> UC_LOGIN
+farmer --> UC_GOAUTH
+farmer --> UC_LOGOUT
+farmer --> UC_DASH
+farmer --> UC_F_SIMPLE
+farmer --> UC_F_GPS
+farmer --> UC_F_MAP
+farmer --> UC_F_EDIT
+farmer --> UC_F_DEL
+farmer --> UC_HEALTH
+farmer --> UC_ROADMAP
+farmer --> UC_RDTRACK
+farmer --> UC_SOIL
+farmer --> UC_CREC
+farmer --> UC_CHIST
+farmer --> UC_CSYNC
+farmer --> UC_CTRACK
+farmer --> UC_CDETAIL
+farmer --> UC_PHOTO
+farmer --> UC_DIAG
+farmer --> UC_CORRECT
+farmer --> UC_DSAVE
+farmer --> UC_DHIST
+farmer --> UC_ASK
+farmer --> UC_PEST
+farmer --> UC_GUIDE
+farmer --> UC_IRRIG
+farmer --> UC_WEATHER
+farmer --> UC_VOICE
+farmer --> UC_PROF
+farmer --> UC_LANG
+farmer --> UC_SETTINGS
+
+' Include / Extend
+UC_LOGIN   ..> UC_SESSION  : «include»
+UC_GOAUTH  ..> UC_SESSION  : «include»
+UC_CREC    ..> UC_SOIL     : «include»
+UC_CREC    ..> UC_WFETCH   : «include»
+UC_ROADMAP ..> UC_F_EDIT   : «include»
+UC_DASH    ..> UC_STATS    : «include»
+
+UC_CORRECT ..> UC_DIAG    : «extend»
+UC_DSAVE   ..> UC_DIAG    : «extend»
+UC_CSYNC   ..> UC_CREC    : «extend»
+UC_RDTRACK ..> UC_ROADMAP : «extend»
+UC_FSTATS  ..> UC_PROF    : «extend»
+
+' Firebase
+firebase --> UC_REG
+firebase --> UC_SESSION
+firebase --> UC_F_SIMPLE
+firebase --> UC_F_GPS
+firebase --> UC_CHIST
+firebase --> UC_DHIST
+firebase --> UC_CTRACK
+firebase --> UC_LANG
+firebase --> UC_RDTRACK
+firebase --> UC_DASH
+
+' Claude AI
+claude --> UC_CREC
+claude --> UC_DIAG
+claude --> UC_CORRECT
+claude --> UC_ASK
+claude --> UC_ROADMAP
+claude --> UC_IRRIG
+claude --> UC_VOICE
+claude --> UC_GUIDE
+
+' OpenWeatherMap
+owm --> UC_WFETCH
+owm --> UC_WEATHER
+owm --> UC_IRRIG
+
+' Device
+device --> UC_F_GPS
+device --> UC_PHOTO
+device --> UC_VOICE
+
+@enduml
